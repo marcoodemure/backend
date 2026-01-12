@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Your Cart</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body onload="loadCart()">
+
+<h2>Your Cart</h2>
+
+<ul id="cartList"></ul>
+
+<p>Total: <strong id="totalPrice">$0</strong></p>
+
+<button onclick="checkout()">Fake Checkout</button>
+<button onclick="handleLogout()">Logout</button>
+
+<script type="module" src="js/cart.js"></script>
+</body>
+</html>
