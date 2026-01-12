@@ -1,20 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Your Cart</title>
+  <meta charset="UTF-8">
+  <title>Your Cart - Habi't Likha</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body onload="loadCart()">
+<body>
 
 <h2>Your Cart</h2>
 
+<nav id="nav">
+  <a href="index.html">Shop</a> |
+  <a href="orders.html">Orders</a> |
+  <button id="logoutBtn" style="display:none">Logout</button>
+  <span id="userEmail"></span>
+</nav>
+
 <ul id="cartList"></ul>
-
 <p>Total: <strong id="totalPrice">$0</strong></p>
+<button id="checkoutBtn">Checkout</button>
 
-<button onclick="checkout()">Fake Checkout</button>
-<button onclick="handleLogout()">Logout</button>
+<script type="module">
+import { auth } from "./firebase.js";
+import { loadCart, handleLogout, checkout } from "./cart.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-<script type="module" src="js/cart.js"></script>
+const logoutBtn = document.getElementById("logoutBtn");
+const userEmailSpan = document.getElementById("userEmail");
+const checkoutBtn = document.getElementById("checkoutBtn");
+
+logoutBtn.onclick = handleLogout;
+checkoutBtn.onclick = checkout;
+
+// Track login state
+onAuthStateChanged(auth, user => {
+  if (user) {
+    logoutBtn.style.display = "inline-block";
+    userEmailSpan.textContent = `Logged in as: ${user.email}`;
+    loadCart();
+  } else {
+    logoutBtn.style.display = "none";
+    userEmailSpan.textContent = "";
+    document.getElementById("cartList").innerHTML = "<li>Please log in to view your cart</li>";
+    document.getElementById("totalPrice").textContent = "$0";
+  }
+});
+</script>
+
 </body>
 </html>
