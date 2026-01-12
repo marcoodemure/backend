@@ -3,7 +3,10 @@ import {
   doc,
   getDoc,
   setDoc,
-  deleteDoc
+  deleteDoc,
+  collection,
+  addDoc,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import {
   signOut,
@@ -11,12 +14,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { products } from "./products.js";
 
+/* ---------------- ADD TO CART ---------------- */
+
 export async function addToCart(productId) {
   const user = auth.currentUser;
-  if (!user) {
-    alert("Please log in first");
-    return;
-  }
+  if (!user) return alert("Please log in first");
 
   const ref = doc(db, "carts", user.uid);
   const snap = await getDoc(ref);
@@ -28,7 +30,26 @@ export async function addToCart(productId) {
   alert("Added to cart");
 }
 
-export async function loadCart() {
+/* ---------------- QUANTITY UPDATE ---------------- */
+
+async function updateQuantity(productId, change) {
+  const user = auth.currentUser;
+  const ref = doc(db, "carts", user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  let items = snap.data().items;
+  items[productId] += change;
+
+  if (items[productId] <= 0) delete items[productId];
+
+  await setDoc(ref, { items });
+  loadCart();
+}
+
+/* ---------------- LOAD CART ---------------- */
+
+export function loadCart() {
   onAuthStateChanged(auth, async user => {
     if (!user) return;
 
@@ -36,40 +57,67 @@ export async function loadCart() {
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
 
-    let total = 0;
     cartList.innerHTML = "";
+    let total = 0;
 
     for (let id in snap.data().items) {
       const qty = snap.data().items[id];
       const product = products.find(p => p.id === id);
 
       total += product.price * qty;
-      cartList.innerHTML += `<li>${product.name} x ${qty}</li>`;
+
+      cartList.innerHTML += `
+        <li>
+          ${product.name} - $${product.price}
+          <button onclick="changeQty('${id}', -1)">−</button>
+          ${qty}
+          <button onclick="changeQty('${id}', 1)">+</button>
+        </li>
+      `;
     }
 
     totalPrice.innerText = "$" + total;
   });
 }
 
+/* expose quantity function */
+window.changeQty = updateQuantity;
+
+/* ---------------- CHECKOUT + ORDER HISTORY ---------------- */
+
 export async function checkout() {
   const user = auth.currentUser;
   if (!user) return;
 
-  await deleteDoc(doc(db, "carts", user.uid));
-  alert("Checkout successful (demo only)");
+  const cartRef = doc(db, "carts", user.uid);
+  const snap = await getDoc(cartRef);
+  if (!snap.exists()) return;
+
+  const items = snap.data().items;
+
+  await addDoc(collection(db, "orders"), {
+    userId: user.uid,
+    items,
+    createdAt: new Date().toISOString()
+  });
+
+  await deleteDoc(cartRef);
+  alert("Checkout complete (demo)");
   window.location.reload();
 }
 
+/* ---------------- LOGOUT ---------------- */
+
 export function handleLogout() {
-  signOut(auth).then(() => {
-    window.location.href = "login.html";
-  });
+  signOut(auth).then(() => window.location.href = "login.html");
 }
 
-// 🔗 Handles ?product=lamp from Google Sites
+/* ---------------- GOOGLE SITES URL SUPPORT ---------------- */
+
 export function autoAddFromURL() {
   const params = new URLSearchParams(window.location.search);
   const productId = params.get("product");
+
   if (!productId) return;
 
   onAuthStateChanged(auth, user => {
@@ -77,5 +125,35 @@ export function autoAddFromURL() {
       addToCart(productId);
       history.replaceState({}, document.title, "index.html");
     }
+  });
+}
+
+/* ---------------- LOAD ORDER HISTORY ---------------- */
+
+export async function loadOrders() {
+  onAuthStateChanged(auth, async user => {
+    if (!user) return;
+
+    const q = await getDocs(collection(db, "orders"));
+    orderList.innerHTML = "";
+
+    q.forEach(docSnap => {
+      const order = docSnap.data();
+      if (order.userId !== user.uid) return;
+
+      let summary = "";
+      for (let id in order.items) {
+        const p = products.find(pr => pr.id === id);
+        summary += `${p.name} x ${order.items[id]}<br>`;
+      }
+
+      orderList.innerHTML += `
+        <li>
+          <strong>Order</strong><br>
+          ${summary}
+          <hr>
+        </li>
+      `;
+    });
   });
 }
