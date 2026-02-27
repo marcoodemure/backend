@@ -1,5 +1,5 @@
 (function () {
-  const firestoreDatabaseId = "default";
+  const firestoreDatabaseId = "";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDTSdGQo-CVxSyig4V1oIz60WDZmy62HuQ",
