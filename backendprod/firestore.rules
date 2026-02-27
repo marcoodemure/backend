@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function userRole(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    }
+
+    function isAdmin() {
+      return signedIn() && userRole(request.auth.uid) == "admin";
+    }
+
+    match /users/{uid} {
+      allow create: if isOwner(uid);
+      allow read, update: if isOwner(uid) || isAdmin();
+      allow delete: if false;
+
+      match /orders/{orderId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid) || isAdmin();
+        allow update: if isOwner(uid) || isAdmin();
+        allow delete: if false;
+      }
+    }
+
+    match /carts/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /payment_sessions/{sessionId} {
+      allow read, create, update: if true;
+      allow delete: if false;
+    }
+
+    match /order_audit/{auditId} {
+      allow create: if signedIn();
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /mail/{mailId} {
+      allow create: if signedIn();
+      allow read, update, delete: if false;
+    }
+
+    match /return_requests/{requestId} {
+      allow create, read, update: if signedIn();
+      allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if signedIn();
+      allow read, update: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if false;
+    }
+  }
+}

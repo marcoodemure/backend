@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redirecting...</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const paramProductId = Number(params.get("product_id"));
+    const savedProductId = Number(localStorage.getItem("cartProductId"));
+    const productId = paramProductId || savedProductId;
+
+    if (productId) {
+      localStorage.setItem("cartProductId", String(productId));
+      window.location.href = `checkout.html?product_id=${productId}`;
+    } else {
+      document.body.innerHTML = "<h2>No product selected</h2>";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="orders-header">
+  <div class="orders-title">
+    <h1>Customer Profile</h1>
+  </div>
+  <div class="user-panel" id="profileUserPanel"></div>
+</div>
+
+<div class="orders-page">
+  <div id="profileFeedback" class="page-feedback hidden"></div>
+  <div class="admin-card">
+    <form id="profileForm" class="admin-form" autocomplete="off">
+      <input id="profileFirstName" type="text" placeholder="First name">
+      <input id="profileLastName" type="text" placeholder="Last name">
+      <input id="profilePhone" type="text" placeholder="Phone">
+      <input id="profileCountry" type="text" placeholder="Country">
+      <input id="profileCity" type="text" placeholder="City">
+      <input id="profileProvince" type="text" placeholder="Province">
+      <input id="profilePostalCode" type="text" placeholder="Postal code">
+      <input id="profileAddress1" type="text" placeholder="Address line 1">
+      <input id="profileAddress2" type="text" placeholder="Address line 2 (optional)">
+      <div class="address-map-card profile-map-card">
+        <div class="address-map-head">
+          <h3>Map Address Picker</h3>
+          <button id="profileLocateBtn" type="button">Locate Typed Address</button>
+        </div>
+        <p id="profileMapHint" class="address-map-hint">Click map to set address fields.</p>
+        <div id="profileMapPreview" class="address-map-preview"></div>
+      </div>
+      <div class="admin-form-actions">
+        <button id="saveProfileBtn" type="submit">Save Profile</button>
+        <a href="checkout.html" class="cartBtn">Go to Checkout</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-auth-helpers.js"></script>
+<script src="firebase-db.js"></script>
+<script src="profile.js"></script>
+</body>
+</html>

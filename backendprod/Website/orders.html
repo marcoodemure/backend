@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Orders</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="orders-header">
+  <div class="orders-title">
+    <h1>Your Orders</h1>
+  </div>
+  <div class="user-panel" id="userPanel"></div>
+</div>
+
+<div class="orders-page">
+  <div id="ordersFeedback" class="page-feedback hidden"></div>
+  <div id="ordersList"></div>
+  <div id="ordersPagination" class="list-pagination"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-auth-helpers.js"></script>
+<script src="firebase-db.js"></script>
+<script src="orders.js"></script>
+</body>
+</html>

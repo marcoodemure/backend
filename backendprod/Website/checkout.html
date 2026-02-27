@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="checkout">
+  <div class="left">
+    <div class="section checkout-progress-wrap" aria-label="Checkout progress">
+      <div id="checkoutProgress" class="checkout-progress" role="list">
+        <div class="checkout-progress-step is-active" data-step="contact" role="listitem">Contact</div>
+        <div class="checkout-progress-step" data-step="address" role="listitem">Address</div>
+        <div class="checkout-progress-step" data-step="pin" role="listitem">Pin Confirmed</div>
+        <div class="checkout-progress-step" data-step="payment" role="listitem">Payment</div>
+      </div>
+    </div>
+
+    <div class="section checkout-panel contact-panel">
+      <div class="header-row">
+        <h2 class="section-title"><span class="title-icon" aria-hidden="true">C</span>Contact</h2>
+        <div id="userStatus" class="user-status"></div>
+      </div>
+      <p class="section-subtitle">We will send your receipt and delivery updates to this email.</p>
+
+      <input class="input" id="emailInput" type="email" placeholder="Email" />
+      <p id="emailError" class="input-error hidden"></p>
+      <label class="checkbox">
+        <input type="checkbox" checked />
+        Email me with news and offers
+      </label>
+    </div>
+
+    <div class="section checkout-panel delivery-panel">
+      <h2 class="section-title"><span class="title-icon" aria-hidden="true">D</span>Delivery</h2>
+      <p class="section-subtitle">Choose delivery or pickup, then complete only the details for that option.</p>
+
+      <div class="toggle">
+        <button id="shipBtn" class="active" type="button">Ship</button>
+        <button id="pickupBtn" type="button">Pickup</button>
+      </div>
+
+      <div id="shippingSection">
+        <p class="form-group-title">Recipient Information</p>
+        <input class="input" id="countryInput" placeholder="Country" />
+        <div class="row">
+          <input class="input" id="firstNameInput" placeholder="First name" />
+          <input class="input" id="lastNameInput" placeholder="Last name" />
+        </div>
+        <input class="input" id="companyInput" placeholder="Company (optional)" />
+        <p class="form-group-title">Address Details</p>
+        <input class="input" id="addressLine1Input" placeholder="Address" />
+        <input class="input" id="addressLine2Input" placeholder="Apartment, suite, etc. (optional)" />
+        <div class="row">
+          <input class="input" id="postalCodeInput" placeholder="Postal code" />
+          <input class="input" id="cityInput" placeholder="City" />
+        </div>
+        <p id="postalHint" class="field-hint hidden" aria-live="polite"></p>
+        <input class="input" id="provinceInput" placeholder="Province" />
+        <input class="input" id="phoneInput" placeholder="Phone" />
+        <p id="phoneHint" class="field-hint hidden" aria-live="polite"></p>
+        <p id="addressPartsHint" class="field-hint hidden" aria-live="polite"></p>
+        <label class="checkbox">
+          <input id="saveProfileCheckbox" type="checkbox" />
+          Save this information for next time
+        </label>
+        <div class="saved-address-toolbar">
+          <select id="savedAddressSlotSelect" class="input">
+            <option value="home">Saved Address: Home</option>
+            <option value="school">Saved Address: School</option>
+            <option value="work">Saved Address: Work</option>
+          </select>
+          <button id="saveAddressSlotBtn" type="button">Save current to slot</button>
+          <button id="clearAddressSlotBtn" type="button">Clear slot</button>
+        </div>
+        <p id="savedAddressStatus" class="field-hint hidden" aria-live="polite"></p>
+
+        <div class="address-map-card">
+          <p class="form-group-title">Pin Exact Delivery Location</p>
+          <div class="address-map-head">
+            <h3 class="section-title-sm"><span class="title-icon-sm" aria-hidden="true">M</span>Address Preview</h3>
+            <div class="address-map-actions">
+              <button id="locateAddressBtn" type="button" aria-label="Locate typed address on map">Locate Typed Address</button>
+              <button id="useCurrentLocationBtn" type="button" aria-label="Use current browser location">Use my current location</button>
+              <button id="confirmPinBtn" type="button" aria-label="Confirm delivery pin">Confirm this pin</button>
+            </div>
+          </div>
+          <p id="addressMapHint" class="address-map-hint">Click the map to pick your location.</p>
+          <label class="checkbox map-default-pin-toggle">
+            <input id="saveDefaultPinCheckbox" type="checkbox" />
+            Save as default delivery pin
+          </label>
+          <div id="addressCandidatesWrap" class="address-candidates hidden">
+            <label for="addressCandidatesSelect">Possible matches</label>
+            <div class="address-candidates-row">
+              <select id="addressCandidatesSelect"></select>
+              <button id="useSelectedCandidateBtn" type="button">Use selected</button>
+            </div>
+          </div>
+          <div id="addressMapPreview" class="address-map-preview"></div>
+          <div id="mapLoadingSkeleton" class="skeleton-map hidden" aria-hidden="true"></div>
+          <div id="pinMapPreviewWrap" class="pin-map-preview hidden">
+            <p>Courier pinpoint preview</p>
+            <small class="pin-map-help-text">Helps couriers find your exact delivery location.</small>
+            <iframe id="pinMapPreviewFrame" title="Pinned delivery location map preview" loading="lazy"></iframe>
+            <a id="pinMapPreviewLink" href="#" target="_blank" rel="noopener noreferrer">
+              Open full map
+            </a>
+            <small id="pinMapPreviewStatus" class="pin-map-preview-status hidden"></small>
+          </div>
+        </div>
+
+        <div class="shipping-method">
+          <h3 class="section-title-sm"><span class="title-icon-sm" aria-hidden="true">S</span>Shipping method</h3>
+
+          <div class="method-card">
+            <input type="radio" name="shipping" id="standard_shipping" checked>
+            <label for="standard_shipping">
+              <div class="method-title">Standard Shipping</div>
+              <div class="method-desc">3-5 business days</div>
+            </label>
+            <div class="method-price">PHP 70.00</div>
+          </div>
+
+          <div class="method-card">
+            <input type="radio" name="shipping" id="express_shipping">
+            <label for="express_shipping">
+              <div class="method-title">Express Shipping</div>
+              <div class="method-desc">1-2 business days</div>
+            </label>
+            <div class="method-price">PHP 150.00</div>
+          </div>
+        </div>
+
+        <div class="payment-method">
+          <h3 class="section-title-sm"><span class="title-icon-sm" aria-hidden="true">P</span>Payment method</h3>
+
+          <div class="method-card">
+            <input type="radio" name="payment" id="cash_on_delivery" checked>
+            <label for="cash_on_delivery">
+              <div class="method-title">Cash on Delivery</div>
+              <div class="method-desc">Pay when you receive your order</div>
+            </label>
+          </div>
+
+          <div class="method-card">
+            <input type="radio" name="payment" id="gcash">
+            <label for="gcash">
+              <div class="method-title">GCash</div>
+              <div class="method-desc">Pay using GCash</div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div id="pickupSection" class="hidden">
+        <div class="pickup-alert">
+          <span class="icon">i</span>
+          <div>
+            <strong>Pickup is available from Notre Dame of Dadiangas University (NDDU)</strong><br />
+            <a href="#" id="shipToAddressLink">Ship to address instead</a>
+          </div>
+        </div>
+
+        <div class="pickup-card">
+          <div class="pickup-header">
+            <strong>Notre Dame of Dadiangas University (NDDU)</strong>
+            <span class="free">FREE</span>
+          </div>
+          <p class="pickup-address">
+            459C+CJ6, Marist Ave, General Santos City (Dadiangas),<br>
+            9500 South Cotabato
+          </p>
+          <div class="pickup-meta">Usually ready in 5+ days</div>
+
+          <div class="pickup-form-grid">
+            <input class="input" id="pickupNameInput" placeholder="Pickup contact name" />
+            <input class="input" id="pickupContactInput" placeholder="Pickup contact phone" />
+            <input class="input" id="pickupDateInput" type="date" />
+            <select class="input" id="pickupTimeInput">
+              <option value="">Select pickup time</option>
+              <option value="09:00-11:00">09:00-11:00</option>
+              <option value="11:00-13:00">11:00-13:00</option>
+              <option value="13:00-15:00">13:00-15:00</option>
+              <option value="15:00-17:00">15:00-17:00</option>
+            </select>
+          </div>
+          <label class="checkbox">
+            <input id="pickupAgreeCheckbox" type="checkbox" />
+            I will bring a valid ID and my pickup reference.
+          </label>
+          <p id="pickupHint" class="field-hint hidden" aria-live="polite"></p>
+          <p id="pickupReferenceText" class="pickup-reference hidden"></p>
+        </div>
+        </div>
+      </div>
+
+    <div class="section checkout-panel notes-panel">
+      <h2 class="section-title"><span class="title-icon" aria-hidden="true">N</span>Order Notes</h2>
+      <p class="section-subtitle">Optional: add landmarks, gate instructions, or preferred contact notes.</p>
+      <textarea class="input checkout-notes" id="orderNotesInput" rows="4" placeholder="Add delivery instructions or special notes (optional)"></textarea>
+    </div>
+
+    <div id="checkoutFeedback" class="checkout-feedback hidden" role="status" aria-live="polite"></div>
+    <button class="pay-btn" type="button">Pay now</button>
+    <div id="pinSuccessMark" class="pin-success-mark hidden" aria-hidden="true">Pin saved</div>
+
+    <div id="orderComplete" class="order-complete hidden">
+      <h3>Order complete</h3>
+      <p id="orderCompleteText">Your order has been placed.</p>
+      <p id="pickupCompleteInfo" class="pickup-complete-info hidden"></p>
+      <div id="pickupClaimWrap" class="pickup-claim-wrap hidden">
+        <p class="pickup-claim-title">Pickup claim QR</p>
+        <img id="pickupClaimQrImage" alt="Pickup claim QR code" />
+      </div>
+      <a href="orders.html" class="order-history-btn">Order history</a>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="checkout-side-head">
+      <h2 class="section-title"><span class="title-icon" aria-hidden="true">O</span>Order Summary</h2>
+      <p>Review items, quantity, payment, and total before placing your order.</p>
+    </div>
+    <div class="catalog-filter-card">
+      <h3>Browse Products</h3>
+      <div class="catalog-filter-row">
+        <select id="checkoutCategoryFilter">
+          <option value="all">All categories</option>
+        </select>
+        <input id="checkoutTagFilter" type="text" placeholder="Filter by tag">
+      </div>
+      <div class="catalog-filter-row">
+        <input id="checkoutMinPriceFilter" type="number" min="0" step="1" placeholder="Min price">
+        <input id="checkoutMaxPriceFilter" type="number" min="0" step="1" placeholder="Max price">
+      </div>
+      <div id="checkoutTagChips" class="tag-chip-wrap"></div>
+      <select id="checkoutProductSelect"></select>
+    </div>
+    <div id="cartSummary"></div>
+  </div>
+</div>
+<div id="orderConfetti" class="order-confetti" aria-hidden="true"></div>
+
+<div id="authPrompt" class="auth-prompt hidden">
+  <div class="auth-prompt-card">
+    <h3>Sign in or create account</h3>
+    <p>Continue to your account to complete this order.</p>
+    <div class="auth-prompt-actions">
+      <a id="authSigninLink" href="signin.html">Sign in</a>
+      <a id="authCreateLink" href="create-account.html">Create account</a>
+      <button id="authCancelBtn" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="qrPaymentModal" class="qr-payment-modal hidden">
+  <div class="qr-payment-card">
+    <h3>Mock QR Payment</h3>
+    <p>Scan this QR code on another device to complete payment.</p>
+    <img id="qrPaymentImage" alt="Mock payment QR code" />
+    <p id="qrPaymentStatus" class="qr-payment-status">Waiting for scan...</p>
+    <div class="qr-payment-actions">
+      <a id="qrPaymentOpenScanBtn" href="#" target="_blank" rel="noopener noreferrer">Open scanner page</a>
+      <button id="qrPaymentCancelBtn" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-auth-helpers.js"></script>
+<script src="firebase-db.js"></script>
+<script src="checkout.js"></script>
+</body>
+</html>

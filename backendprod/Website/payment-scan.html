@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mock Payment Scan</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="scan-page">
+  <div class="scan-card" id="scanCard" data-state="loading">
+    <h1>Mock Payment</h1>
+    <div class="scan-loader" aria-hidden="true"></div>
+    <p id="scanStatusText">Processing scanned payment...</p>
+    <p class="scan-help">Keep this page open for a few seconds while we confirm your payment.</p>
+    <button id="scanDoneBtn" type="button" class="hidden">Close</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-auth-helpers.js"></script>
+<script src="firebase-db.js"></script>
+<script src="payment-scan.js"></script>
+</body>
+</html>
