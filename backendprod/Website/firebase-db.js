@@ -1,5 +1,11 @@
 (function () {
+  let cachedDb = null;
+
   function getDbInstance() {
+    if (cachedDb) {
+      return cachedDb;
+    }
+
     if (!window.firebaseReady || !window.firebase || typeof window.firebase.firestore !== "function") {
       return null;
     }
@@ -10,23 +16,41 @@
     const app = typeof window.firebase.app === "function" ? window.firebase.app() : null;
 
     try {
+      let db = null;
+
       if (databaseId) {
         try {
           // Prefer named database when configured (e.g., "dbbackend").
           if (app) {
-            return window.firebase.firestore(app, databaseId);
+            db = window.firebase.firestore(app, databaseId);
+          } else {
+            db = window.firebase.firestore(databaseId);
           }
-          return window.firebase.firestore(databaseId);
         } catch (namedDbError) {
           console.warn(`Named Firestore database "${databaseId}" is unavailable in this SDK path; falling back to default database.`, namedDbError);
         }
       }
 
-      if (app) {
-        return window.firebase.firestore(app);
+      if (!db && app) {
+        db = window.firebase.firestore(app);
       }
 
-      return window.firebase.firestore();
+      if (!db) {
+        db = window.firebase.firestore();
+      }
+
+      // Helps on restrictive networks/incognito where websocket streams may fail.
+      try {
+        db.settings({
+          experimentalAutoDetectLongPolling: true,
+          useFetchStreams: false
+        });
+      } catch (settingsError) {
+        // Firestore settings can only be set once before first use.
+      }
+
+      cachedDb = db;
+      return cachedDb;
     } catch (error) {
       console.error("Failed to initialize Firestore", error);
       return null;
