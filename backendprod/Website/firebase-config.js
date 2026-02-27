@@ -1,15 +1,14 @@
 (function () {
-  const firestoreDatabaseId = "dbbackend";
+  const firestoreDatabaseId = "default";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyD6pb-mQZDMgruLeCmypmNVWyidUula-FM",
-    authDomain: "habitlikha.firebaseapp.com",
-    projectId: "habitlikha",
-    storageBucket: "habitlikha.firebasestorage.app",
-    messagingSenderId: "54672465819",
-    appId: "1:54672465819:web:29609e1f084357ecbf4b3e",
-    measurementId: "G-3FP0ZXZCJD"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyDTSdGQo-CVxSyig4V1oIz60WDZmy62HuQ",
+  authDomain: "backend-153ff.firebaseapp.com",
+  projectId: "backend-153ff",
+  storageBucket: "backend-153ff.firebasestorage.app",
+  messagingSenderId: "186787272282",
+  appId: "1:186787272282:web:9e59cda437ce90da90ea63"
+};
 
   const configured = Object.values(firebaseConfig).every(
     (value) => typeof value === "string" && value.length > 0 && !value.startsWith("REPLACE_WITH_")
