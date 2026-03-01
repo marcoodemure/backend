@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const adminContent = document.getElementById("adminContent");
   const adminUnauthorized = document.getElementById("adminUnauthorized");
   const adminUserPanel = document.getElementById("adminUserPanel");
+  const adminHeaderLogoutBtn = document.getElementById("adminHeaderLogoutBtn");
   const adminLoginWall = document.getElementById("adminLoginWall");
   const adminLoginForm = document.getElementById("adminLoginForm");
   const adminEmailInput = document.getElementById("adminEmailInput");
@@ -25,7 +26,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const productStockInput = document.getElementById("productStockInput");
   const productCategoryInput = document.getElementById("productCategoryInput");
   const productTagsInput = document.getElementById("productTagsInput");
+  const saveProductBtn = document.getElementById("saveProductBtn");
   const clearProductBtn = document.getElementById("clearProductBtn");
+  const productFormStatus = document.getElementById("productFormStatus");
   const productLinkResult = document.getElementById("productLinkResult");
   const productLinkInput = document.getElementById("productLinkInput");
   const copyProductLinkBtn = document.getElementById("copyProductLinkBtn");
@@ -77,7 +80,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // wait for Firebase auth state in case it hasn't hydrated yet
-  async function waitForAuthUser(timeoutMs = 4000) {
+  async function waitForAuthUser(timeoutMs = 7000) {
+    const cached = auth.getCurrentUser();
+    if (cached?.uid) {
+      return cached;
+    }
+
+    if (typeof auth.waitForAuthState === "function") {
+      return auth.waitForAuthState(Math.min(2500, Math.max(1, Number(timeoutMs) || 2500)));
+    }
+
     return new Promise((resolve) => {
       const existing = auth.getCurrentUser();
       if (existing) {
@@ -99,27 +111,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   let signedIn = await waitForAuthUser();
   if (!signedIn || !signedIn.uid) {
     // not logged in, go back to login
-    window.location.href = "admin.html";
-    return;
-  }
-
-  try {
-    const profile = await appDb.ensureUserDocument(signedIn);
-    if (profile?.role !== "admin") {
-      await auth.signOut();
-      window.location.href = "admin.html";
-      return;
-    }
-    // show the signed-in user in UI
-    await renderUserPanel(signedIn);
-  } catch (err) {
-    console.error("Failed to verify admin role", err);
-    window.location.href = "admin.html";
+    window.location.replace("admin.html");
     return;
   }
 
   let lowStockThreshold = Math.max(1, Number(localStorage.getItem("lowStockThreshold")) || 5);
   const ORDERS_PAGE_SIZE = 8;
+  const INITIAL_ORDERS_LIMIT = 80;
+  const ANALYTICS_MIN_REFRESH_MS = 15000;
+  const ROLE_CACHE_KEY = "adminRoleCacheV1";
+  const ROLE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
   let allProducts = [];
   let allOrders = [];
@@ -135,9 +136,58 @@ document.addEventListener("DOMContentLoaded", async () => {
   let allReturnRequests = [];
   let allNotifications = [];
   let backendAnalyticsSummary = null;
+  let savingProduct = false;
+  let currentUserRole = "";
+  let deferredListenersTimer = null;
+  let analyticsRefreshTimer = null;
+  let analyticsRefreshInFlight = false;
+  let analyticsRefreshQueued = false;
+  let lastAnalyticsRefreshAt = 0;
+  let roleRefreshInFlight = false;
 
   function getCurrentUser() {
     return auth.getCurrentUser();
+  }
+
+  function readCachedRole(uid) {
+    if (!uid) return "";
+    try {
+      const raw = localStorage.getItem(ROLE_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const sameUser = String(parsed?.uid || "") === String(uid);
+        const role = String(parsed?.role || "").toLowerCase();
+        const cachedAt = Number(parsed?.cachedAt || 0);
+        if (sameUser && role && Number.isFinite(cachedAt) && (Date.now() - cachedAt) <= ROLE_CACHE_TTL_MS) {
+          return role;
+        }
+        if (sameUser) {
+          localStorage.removeItem(ROLE_CACHE_KEY);
+        }
+      }
+    } catch {}
+    return "";
+  }
+
+  function writeCachedRole(uid, role) {
+    const safeUid = String(uid || "");
+    const safeRole = String(role || "").toLowerCase();
+    if (!safeUid || !safeRole) return;
+    try {
+      localStorage.setItem("userRole", safeRole);
+      localStorage.setItem(ROLE_CACHE_KEY, JSON.stringify({
+        uid: safeUid,
+        role: safeRole,
+        cachedAt: Date.now()
+      }));
+    } catch {}
+  }
+
+  function clearCachedRole() {
+    try {
+      localStorage.removeItem("userRole");
+      localStorage.removeItem(ROLE_CACHE_KEY);
+    } catch {}
   }
 
   function formatMoney(value) {
@@ -249,6 +299,46 @@ document.addEventListener("DOMContentLoaded", async () => {
       toast.classList.add("hide");
       setTimeout(() => toast.remove(), 250);
     }, 2600);
+  }
+
+  function setProductFormStatus(message, type) {
+    if (!productFormStatus) return;
+    productFormStatus.classList.remove("hidden", "is-success", "is-error", "is-info");
+    if (!message) {
+      productFormStatus.textContent = "";
+      productFormStatus.classList.add("hidden");
+      return;
+    }
+    productFormStatus.textContent = message;
+    productFormStatus.classList.add(`is-${type || "info"}`);
+  }
+
+  function withTimeout(promise, timeoutMs, timeoutCode, timeoutMessage) {
+    const safeMs = Math.max(1000, Number(timeoutMs) || 15000);
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        const err = new Error(timeoutMessage || "Request timed out.");
+        err.code = timeoutCode || "timeout";
+        reject(err);
+      }, safeMs);
+
+      Promise.resolve(promise)
+        .then((value) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((error) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          reject(error);
+        });
+    });
   }
 
   function escapeHtml(value) {
@@ -408,16 +498,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       <span>${user.email}</span>
       <a href="orders.html">Orders</a>
       <a href="profile.html">Profile</a>
-      <button id="adminLogoutBtn" type="button">Log out</button>
     `;
+  }
 
-    const logoutBtn = document.getElementById("adminLogoutBtn");
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", async () => {
+  function bindLogoutButton(button) {
+    if (!button || button.dataset.bound === "1") return;
+    button.dataset.bound = "1";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
         await auth.signOut();
-        window.location.href = "admin.html";
-      });
-    }
+      } catch (error) {
+        console.error("Failed to sign out admin user", error);
+      } finally {
+        try {
+          localStorage.removeItem("currentUser");
+          clearCachedRole();
+          sessionStorage.removeItem("forceAdminLoggedOut");
+          sessionStorage.removeItem("adminLoginError");
+        } catch {}
+        window.location.replace("admin.html");
+      }
+    });
   }
 
   function matchesProductSearch(product, searchValue) {
@@ -501,6 +603,46 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.error("Failed to load backend analytics summary", error);
       backendAnalyticsSummary = null;
     }
+  }
+
+  async function runAnalyticsRefresh(force) {
+    const now = Date.now();
+    if (!force && now - lastAnalyticsRefreshAt < ANALYTICS_MIN_REFRESH_MS) {
+      return;
+    }
+    if (analyticsRefreshInFlight) {
+      analyticsRefreshQueued = true;
+      return;
+    }
+
+    analyticsRefreshInFlight = true;
+    try {
+      await refreshBackendAnalyticsSummary();
+      lastAnalyticsRefreshAt = Date.now();
+      renderMetrics();
+    } catch (error) {
+      console.error("Failed to refresh analytics summary", error);
+    } finally {
+      analyticsRefreshInFlight = false;
+      if (analyticsRefreshQueued) {
+        analyticsRefreshQueued = false;
+        scheduleAnalyticsRefresh(1200, true);
+      }
+    }
+  }
+
+  function scheduleAnalyticsRefresh(delayMs, force) {
+    if (analyticsRefreshTimer) {
+      clearTimeout(analyticsRefreshTimer);
+      analyticsRefreshTimer = null;
+    }
+    const safeDelay = Math.max(0, Number(delayMs) || 0);
+    analyticsRefreshTimer = setTimeout(() => {
+      analyticsRefreshTimer = null;
+      runAnalyticsRefresh(Boolean(force)).catch((error) => {
+        console.error("Analytics refresh scheduler failed", error);
+      });
+    }, safeDelay);
   }
 
   function buildDailySalesRows(orders) {
@@ -1201,37 +1343,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (stopAudit) stopAudit();
     if (stopReturns) stopReturns();
     if (stopNotifications) stopNotifications();
+    if (deferredListenersTimer) clearTimeout(deferredListenersTimer);
+    if (analyticsRefreshTimer) clearTimeout(analyticsRefreshTimer);
     stopProducts = null;
     stopOrders = null;
     stopAudit = null;
     stopReturns = null;
     stopNotifications = null;
+    deferredListenersTimer = null;
+    analyticsRefreshTimer = null;
+    analyticsRefreshInFlight = false;
+    analyticsRefreshQueued = false;
+    lastAnalyticsRefreshAt = 0;
     listenersStarted = false;
   }
 
-  function startRealtimeListeners(user) {
-    if (listenersStarted) return;
-
-    stopProducts = appDb.watchProducts(
-      (products) => renderProducts(products),
-      (error) => {
-        console.error("Product listener error", error);
-        adminProductsList.innerHTML = "<p>Failed to load products.</p>";
-      }
-    );
-
-    stopOrders = appDb.watchAllOrders(
-      (orders) => {
-        renderOrders(orders);
-        refreshBackendAnalyticsSummary()
-          .then(() => renderMetrics())
-          .catch((error) => console.error("Failed to refresh analytics summary", error));
-      },
-      (error) => {
-        console.error("Order listener error", error);
-        adminOrdersList.innerHTML = "<p>Failed to load orders.</p>";
-      }
-    );
+  function startDeferredRealtimeListeners(user) {
+    if (!listenersStarted) return;
 
     if (typeof appDb.watchOrderAudit === "function") {
       stopAudit = appDb.watchOrderAudit(
@@ -1272,49 +1400,147 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (adminNotificationsList) {
       adminNotificationsList.innerHTML = "<p>Notification API is not available.</p>";
     }
-
-    listenersStarted = true;
   }
-  async function resolveUserWithRole(user) {
-    const profile = await appDb.ensureUserDocument(user);
-    if (!profile) return user;
+
+  function startRealtimeListeners(user) {
+    if (listenersStarted) return;
+    listenersStarted = true;
+
+    stopProducts = appDb.watchProducts(
+      (products) => renderProducts(products),
+      (error) => {
+        console.error("Product listener error", error);
+        adminProductsList.innerHTML = "<p>Failed to load products.</p>";
+      }
+    );
+
+    stopOrders = appDb.watchAllOrders(
+      (orders) => {
+        renderOrders(orders);
+        scheduleAnalyticsRefresh(1200, false);
+      },
+      (error) => {
+        console.error("Order listener error", error);
+        adminOrdersList.innerHTML = "<p>Failed to load orders.</p>";
+      },
+      { limitCount: INITIAL_ORDERS_LIMIT }
+    );
+
+    scheduleAnalyticsRefresh(500, true);
+    deferredListenersTimer = setTimeout(() => {
+      deferredListenersTimer = null;
+      startDeferredRealtimeListeners(user);
+    }, 700);
+  }
+  async function refreshRoleFromServer(user, options) {
+    if (!user?.uid || roleRefreshInFlight || typeof appDb.getUserProfile !== "function") {
+      return "";
+    }
+
+    roleRefreshInFlight = true;
     try {
-      localStorage.setItem('userRole', profile.role || 'customer');
-    } catch (e) {}
-    return {
-      ...user,
-      role: profile.role || "customer"
-    };
+      let profile = await withTimeout(
+        appDb.getUserProfile(user.uid),
+        3500,
+        "role_timeout",
+        "Admin role check timed out."
+      );
+      if (!profile && typeof appDb.ensureUserDocument === "function") {
+        profile = await withTimeout(
+          appDb.ensureUserDocument(user),
+          2500,
+          "role_timeout",
+          "Admin role check timed out."
+        );
+      }
+      const role = String(profile?.role || "").toLowerCase();
+      if (role) {
+        writeCachedRole(user.uid, role);
+        currentUserRole = role;
+      }
+      return role;
+    } catch (error) {
+      if (!options?.silent) {
+        if (String(error?.code || "") === "role_timeout") {
+          console.info("Admin role lookup timed out. Using cached role.");
+        } else {
+          console.info("Failed to resolve user role. Using cached role.", error);
+        }
+      }
+      return "";
+    } finally {
+      roleRefreshInFlight = false;
+    }
+  }
+
+  async function resolveUserWithRole(user) {
+    if (!user?.uid) return user;
+
+    const cachedRole = readCachedRole(user.uid) || String(localStorage.getItem("userRole") || "").toLowerCase();
+    if (cachedRole) {
+      refreshRoleFromServer(user, { silent: true }).catch(() => {});
+      return { ...user, role: cachedRole };
+    }
+
+    const liveRole = await Promise.race([
+      refreshRoleFromServer(user, { silent: true }),
+      new Promise((resolve) => setTimeout(() => resolve(""), 1200))
+    ]);
+    if (!liveRole) {
+      refreshRoleFromServer(user, { silent: true }).catch(() => {});
+    }
+    return { ...user, role: String(liveRole || cachedRole || "").toLowerCase() };
   }
 
   async function handleAdminAccess(user, loginMessage) {
     stopRealtimeListeners();
 
-    if (!user) {
+    if (!user?.uid) {
+      currentUserRole = "";
+      clearCachedRole();
       await renderUserPanel(null);
-      showLoginWall(loginMessage || "");
+      window.location.replace("admin.html");
       return;
     }
 
-    let resolvedUser = user;
-    try {
-      resolvedUser = await resolveUserWithRole(user);
-    } catch (error) {
-      console.error("Failed to resolve user role", error);
+    const resolvedUser = await resolveUserWithRole(user);
+
+    const role = String(resolvedUser?.role || "").toLowerCase();
+    currentUserRole = role;
+    if (role) {
+      writeCachedRole(resolvedUser.uid, role);
+    }
+    if (role && role !== "admin") {
       await auth.signOut();
+      currentUserRole = "";
+      clearCachedRole();
       await renderUserPanel(null);
-      showLoginWall("Failed to verify admin account.");
+      const message = `This account is not an admin. Set users/${resolvedUser?.uid || "YOUR_UID"}.role to "admin".`;
+      try {
+        sessionStorage.setItem("adminLoginError", message);
+      } catch {}
+      window.location.replace("admin.html");
       return;
     }
 
-    if ((resolvedUser?.role || "").toLowerCase() !== "admin") {
-      await auth.signOut();
-      await renderUserPanel(null);
-      showLoginWall("This account is not an admin.");
-      return;
+    if (!role) {
+      refreshRoleFromServer(resolvedUser, { silent: true })
+        .then(async (latestRole) => {
+          const normalized = String(latestRole || "").toLowerCase();
+          if (!normalized || normalized === "admin") return;
+          try {
+            await auth.signOut();
+          } catch {}
+          currentUserRole = "";
+          clearCachedRole();
+          window.location.replace("admin.html");
+        })
+        .catch(() => {});
     }
 
+    // if role cannot be resolved, continue loading panel and let write operations report exact permission errors
     await renderUserPanel(resolvedUser);
+    bindLogoutButton(adminHeaderLogoutBtn);
     showAdminContent();
     renderMetrics();
     setSkeleton(adminNotificationsList, 3);
@@ -1426,12 +1652,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   productForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const currentUser = getCurrentUser();
-    if (!currentUser?.uid) {
-      showToast("Please sign in as admin first.", "error");
-      window.location.href = "admin.html";
-      return;
-    }
+    if (savingProduct) return;
 
     const id = Number(productIdInput.value);
     const name = productNameInput.value.trim();
@@ -1444,28 +1665,107 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!id || !name || !size || !Number.isFinite(price) || price < 0 || !image || !Number.isFinite(stock) || stock < 0) {
       showToast("Please fill all product fields correctly.", "error");
+      setProductFormStatus("Please fill all product fields correctly.", "error");
       return;
     }
 
     if (!appDb || !appDb.isConfigured()) {
       showToast("Database is not configured. Cannot save product.", "error");
+      setProductFormStatus("Database is not configured. Cannot save product.", "error");
       console.error("appDb is not available");
       return;
     }
 
+    savingProduct = true;
+    if (saveProductBtn) saveProductBtn.disabled = true;
+    setProductFormStatus("Saving product...", "info");
+
     try {
-      console.log("Attempting to save product", { id, name });
-      await appDb.upsertProduct({ id, name, size, price, image, stock, category: category || "General", tags, isActive: true });
-      console.log("Product saved successfully");
+      const immediateSessionUser = getCurrentUser();
+      const sessionUser = immediateSessionUser?.uid
+        ? immediateSessionUser
+        : await withTimeout(
+            typeof auth.waitForAuthState === "function" ? auth.waitForAuthState(2500) : Promise.resolve(getCurrentUser()),
+            3500,
+            "auth_timeout",
+            "Authentication check timed out."
+          );
+      if (!sessionUser?.uid) {
+        const err = new Error("auth_required");
+        err.code = "auth_required";
+        throw err;
+      }
+
+      const roleHint = String(currentUserRole || readCachedRole(sessionUser.uid) || localStorage.getItem("userRole") || "").toLowerCase();
+      if (roleHint && roleHint !== "admin") {
+        const roleErr = new Error("not_admin");
+        roleErr.code = "not_admin";
+        throw roleErr;
+      }
+
+      console.log("Attempting to save product", { id, name, uid: sessionUser.uid });
+      const savePromise = appDb.upsertProduct({
+        id,
+        name,
+        size,
+        price,
+        image,
+        stock,
+        category: category || "General",
+        tags,
+        isActive: true
+      });
+      let saved = null;
+      try {
+        saved = await withTimeout(
+          savePromise,
+          15000,
+          "save_timeout",
+          "Saving product is taking too long."
+        );
+      } catch (error) {
+        if (String(error?.code || "") !== "save_timeout") {
+          throw error;
+        }
+
+        setProductFormStatus("Slow network detected. Still saving to Firebase...", "info");
+        showToast("Slow network detected. Waiting for Firebase write...", "info");
+        saved = await withTimeout(
+          savePromise,
+          45000,
+          "save_timeout_final",
+          "Saving product timed out. Check network and Firestore write rules, then try again."
+        );
+      }
+      if (!saved || Number(saved.id) !== id) {
+        const err = new Error("save_failed");
+        err.code = "save_failed";
+        throw err;
+      }
+
+      currentUserRole = "admin";
+      writeCachedRole(sessionUser.uid, "admin");
+
       resetProductForm({ keepLink: true });
       showProductLink(id);
       showToast(`Saved product #${id}.`, "success");
+      setProductFormStatus(`Saved product #${id}.`, "success");
     } catch (error) {
       console.error("Failed to save product", error);
       const message = error?.code === "permission-denied"
-        ? "Permission denied: this account is not authorized to write products."
-        : (error?.message || String(error) || "Failed to save product.");
+        ? "Permission denied: this account cannot write products. Check users/<uid>.role = \"admin\" in Firestore."
+        : error?.code === "not_admin"
+          ? "Account is signed in but not admin. Set users/<uid>.role to \"admin\"."
+          : error?.code === "save_timeout_final"
+            ? "Saving timed out. Your network or Firestore rules may be blocking writes."
+          : error?.code === "auth_required"
+            ? "Sign in again as admin to save products."
+            : (error?.message || String(error) || "Failed to save product.");
       showToast(message, "error");
+      setProductFormStatus(message, "error");
+    } finally {
+      savingProduct = false;
+      if (saveProductBtn) saveProductBtn.disabled = false;
     }
   });
 
@@ -1495,8 +1795,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // initial admin access check using current auth state
-  await handleAdminAccess(getCurrentUser(), "");
+  // initial admin access check using resolved sign-in state
+  await handleAdminAccess(signedIn, "");
 
   window.addEventListener("beforeunload", () => stopRealtimeListeners());
 });

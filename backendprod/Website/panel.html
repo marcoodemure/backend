@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Admin Panel</title>
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +17,10 @@
 <div class="admin-page" id="adminPage">
   <div class="admin-header">
     <h1>Admin Dashboard</h1>
-    <div id="adminUserPanel" class="admin-user-panel"></div>
+    <div class="admin-header-actions">
+      <div id="adminUserPanel" class="admin-user-panel"></div>
+      <button id="adminHeaderLogoutBtn" type="button" class="admin-logout-btn">Log out</button>
+    </div>
   </div>
 
   <div id="adminUnauthorized" class="admin-alert hidden">
@@ -62,6 +68,7 @@
           <button id="clearProductBtn" type="button">Clear</button>
         </div>
       </form>
+      <p id="productFormStatus" class="admin-form-status hidden"></p>
 
       <div class="admin-tools-row">
         <input id="adminProductSearch" type="text" placeholder="Search product by name, id, or size">

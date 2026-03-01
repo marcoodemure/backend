@@ -135,6 +135,11 @@
 
     ensureBootstrapListener();
 
+    const immediate = getCurrentUser();
+    if (immediate?.uid) {
+      return Promise.resolve(immediate);
+    }
+
     const existing = auth.currentUser;
     if (existing?.uid) {
       const snapshot = toUserSnapshot(existing);

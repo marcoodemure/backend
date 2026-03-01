@@ -40,19 +40,9 @@
         db = window.firebase.firestore();
       }
 
-      // Helps on restrictive networks/incognito where websocket streams may fail.
-      try {
-        if (!firestoreSettingsApplied) {
-          db.settings({
-            experimentalAutoDetectLongPolling: true,
-            useFetchStreams: false
-          });
-          firestoreSettingsApplied = true;
-        }
-      } catch (settingsError) {
-        // Firestore settings can only be set once before first use.
-        // Swallow the error since settings may already be applied by other code paths.
-      }
+      // Keep default Firestore transport settings to avoid host override warnings
+      // and reduce chances of stalled writes in compat mode.
+      firestoreSettingsApplied = true;
 
       cachedDb = db;
       return cachedDb;
@@ -125,6 +115,132 @@
       .filter(Boolean);
 
     return Array.from(new Set(normalized));
+  }
+
+  function withPromiseTimeout(promise, timeoutMs, timeoutCode, timeoutMessage) {
+    const safeMs = Math.max(1, Number(timeoutMs) || 10000);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        const err = new Error(timeoutMessage || "Request timed out.");
+        err.code = timeoutCode || "timeout";
+        reject(err);
+      }, safeMs);
+
+      Promise.resolve(promise)
+        .then((value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(error);
+        });
+    });
+  }
+
+  function toFirestoreRestValue(value) {
+    if (value === null) {
+      return { nullValue: null };
+    }
+    if (value === undefined) {
+      return null;
+    }
+    if (Array.isArray(value)) {
+      return {
+        arrayValue: {
+          values: value
+            .map((item) => toFirestoreRestValue(item))
+            .filter((item) => item !== null)
+        }
+      };
+    }
+    if (value instanceof Date) {
+      return { timestampValue: value.toISOString() };
+    }
+
+    const type = typeof value;
+    if (type === "string") return { stringValue: value };
+    if (type === "boolean") return { booleanValue: value };
+    if (type === "number") {
+      if (!Number.isFinite(value)) return { nullValue: null };
+      if (Number.isInteger(value)) return { integerValue: String(value) };
+      return { doubleValue: value };
+    }
+    if (type === "object") {
+      const fields = {};
+      Object.keys(value).forEach((key) => {
+        const field = toFirestoreRestValue(value[key]);
+        if (field !== null) {
+          fields[key] = field;
+        }
+      });
+      return { mapValue: { fields } };
+    }
+
+    return { stringValue: String(value) };
+  }
+
+  async function upsertProductViaRest(id, payload) {
+    const app = typeof window.firebase?.app === "function" ? window.firebase.app() : null;
+    const opts = app && app.options ? app.options : {};
+    const projectId = opts.projectId || "";
+    const apiKey = opts.apiKey || "";
+    const databaseId = (typeof window.firebaseDatabaseId === "string" && window.firebaseDatabaseId.trim()) || "(default)";
+    const auth = typeof window.firebase?.auth === "function" ? window.firebase.auth() : null;
+    const user = auth?.currentUser || window.firebaseAuth?.currentUser || null;
+
+    if (!projectId || !apiKey || !user || typeof user.getIdToken !== "function") {
+      const setupErr = new Error("rest_fallback_unavailable");
+      setupErr.code = "rest_fallback_unavailable";
+      throw setupErr;
+    }
+
+    const idToken = await user.getIdToken();
+    const fields = {};
+    Object.keys(payload).forEach((key) => {
+      const field = toFirestoreRestValue(payload[key]);
+      if (field !== null) {
+        fields[key] = field;
+      }
+    });
+
+    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/${encodeURIComponent(databaseId)}/documents/products/${encodeURIComponent(String(id))}?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`
+      },
+      body: JSON.stringify({ fields })
+    });
+
+    if (!res.ok) {
+      let message = "";
+      try {
+        const data = await res.json();
+        message = data?.error?.message || "";
+      } catch {
+        message = await res.text().catch(() => "");
+      }
+      const err = new Error(message || `REST write failed with HTTP ${res.status}`);
+      if (res.status === 401) {
+        err.code = "unauthenticated";
+      } else if (res.status === 403) {
+        err.code = "permission-denied";
+      } else {
+        err.code = "rest_write_failed";
+      }
+      throw err;
+    }
+
+    return payload;
   }
 
   function sanitizeCoordinate(value) {
@@ -625,20 +741,28 @@
     }
 
     const data = snapshot.data() || {};
-    await userRef.set(
-      {
-        uid: user.uid,
-        email: user.email || data.email || "",
-        updatedAt: getServerTimestamp()
-      },
-      { merge: true }
-    );
+    const rawRole = typeof data.role === "string" ? data.role.trim() : "customer";
+    const normalizedRole = rawRole.toLowerCase() === "admin" ? "admin" : (rawRole || "customer");
+    const emailValue = user.email || data.email || "";
+    const shouldWriteRole = normalizedRole !== rawRole;
+    const shouldWriteEmail = emailValue !== sanitizeString(data.email, "");
+    if (shouldWriteRole || shouldWriteEmail) {
+      await userRef.set(
+        {
+          uid: user.uid,
+          email: emailValue,
+          ...(shouldWriteRole ? { role: normalizedRole } : {}),
+          updatedAt: getServerTimestamp()
+        },
+        { merge: true }
+      );
+    }
 
     return {
       id: snapshot.id,
       uid: user.uid,
-      email: user.email || data.email || "",
-      role: typeof data.role === "string" ? data.role : "customer",
+      email: emailValue,
+      role: normalizedRole,
       profile: {
         firstName: sanitizeString(data.profile?.firstName, ""),
         lastName: sanitizeString(data.profile?.lastName, ""),
@@ -786,7 +910,29 @@
       updatedAt: getServerTimestamp()
     };
 
-    await db.collection("products").doc(String(id)).set(payload, { merge: true });
+    const setPromise = db.collection("products").doc(String(id)).set(payload, { merge: true });
+    try {
+      await withPromiseTimeout(
+        setPromise,
+        12000,
+        "save_timeout",
+        "Firestore write is taking too long."
+      );
+    } catch (error) {
+      const code = String(error?.code || "");
+      const shouldFallback = code === "save_timeout" || code === "unavailable" || code === "deadline-exceeded" || code === "internal" || code === "unknown";
+      if (!shouldFallback) {
+        throw error;
+      }
+
+      console.warn("upsertProduct: SDK write stalled, trying REST fallback.", error);
+      const restPayload = {
+        ...payload,
+        updatedAt: new Date().toISOString()
+      };
+      await upsertProductViaRest(id, restPayload);
+    }
+
     return payload;
   }
 
@@ -1265,41 +1411,103 @@
     );
   }
 
-  async function listAllOrders() {
+  async function listAllOrders(options) {
     const db = getDbInstance();
     if (!db) {
       return [];
     }
 
-    const snapshot = await db.collectionGroup("orders").get();
+    const safeLimit = Math.max(0, Number(options?.limitCount) || 0);
+    let snapshot = null;
+
+    try {
+      if (safeLimit > 0) {
+        snapshot = await db.collectionGroup("orders")
+          .orderBy("createdAt", "desc")
+          .limit(safeLimit)
+          .get();
+      } else {
+        snapshot = await db.collectionGroup("orders").get();
+      }
+    } catch (error) {
+      // Fallback path for projects that do not have the needed index yet.
+      if (safeLimit > 0) {
+        console.warn("Limited listAllOrders query failed; falling back to limited unordered query.", error);
+        snapshot = await db.collectionGroup("orders").limit(safeLimit).get();
+      } else {
+        throw error;
+      }
+    }
 
     return snapshot.docs
       .map(mapOrder)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  function watchAllOrders(onData, onError) {
+  function watchAllOrders(onData, onError, options) {
     const db = getDbInstance();
     if (!db) {
       return () => {};
     }
 
-    return db.collectionGroup("orders").onSnapshot(
-      (snapshot) => {
-        const orders = snapshot.docs
-          .map(mapOrder)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const safeLimit = Math.max(0, Number(options?.limitCount) || 0);
+    let unsubscribe = () => {};
+    let fellBackToUnbounded = false;
 
-        onData(orders);
-      },
-      (error) => {
-        if (typeof onError === "function") {
-          onError(error);
-        } else {
-          console.error("All orders realtime listener failed", error);
-        }
+    const pushOrders = (snapshot) => {
+      const orders = snapshot.docs
+        .map(mapOrder)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      onData(orders);
+    };
+
+    const reportError = (error) => {
+      if (typeof onError === "function") {
+        onError(error);
+      } else {
+        console.error("All orders realtime listener failed", error);
       }
-    );
+    };
+
+    const startUnboundedStream = () => {
+      unsubscribe = db.collectionGroup("orders").onSnapshot(pushOrders, reportError);
+    };
+    const startLimitedFallbackStream = () => {
+      unsubscribe = db.collectionGroup("orders")
+        .limit(Math.max(1, safeLimit))
+        .onSnapshot(pushOrders, reportError);
+    };
+
+    if (safeLimit > 0) {
+      unsubscribe = db.collectionGroup("orders")
+        .orderBy("createdAt", "desc")
+        .limit(safeLimit)
+        .onSnapshot(
+          pushOrders,
+          (error) => {
+            const code = String(error?.code || "");
+            const shouldFallback = !fellBackToUnbounded && (code === "failed-precondition" || code === "invalid-argument");
+            if (shouldFallback) {
+              fellBackToUnbounded = true;
+              console.warn("Limited watchAllOrders query failed; falling back to limited unordered stream.", error);
+              try {
+                unsubscribe();
+              } catch {}
+              startLimitedFallbackStream();
+              return;
+            }
+            reportError(error);
+          }
+        );
+    } else {
+      startUnboundedStream();
+    }
+
+    return () => {
+      try {
+        unsubscribe();
+      } catch {}
+    };
   }
 
   async function getAnalyticsSummary(options) {
