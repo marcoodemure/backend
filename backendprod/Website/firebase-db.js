@@ -2014,6 +2014,56 @@
     }
   }
 
+  // Fallback smoke-test using Firestore REST API to avoid SDK transport delays
+  async function testConnectionRest(timeoutMs = 8000) {
+    console.log('appDb.testConnectionRest invoked', { timeoutMs });
+    try {
+      const app = typeof window.firebase?.app === 'function' ? window.firebase.app() : null;
+      const opts = app && app.options ? app.options : {};
+      const projectId = opts.projectId || window.firebaseDatabaseId || null;
+      const apiKey = opts.apiKey || null;
+
+      if (!projectId || !apiKey) {
+        return { ok: false, error: 'Missing projectId or apiKey' };
+      }
+
+      const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents:runQuery?key=${encodeURIComponent(apiKey)}`;
+
+      const body = {
+        structuredQuery: {
+          from: [{ collectionId: 'products' }],
+          limit: 1
+        }
+      };
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        const text = await res.text();
+        return { ok: false, error: `HTTP ${res.status}: ${text}` };
+      }
+
+      const data = await res.json().catch(() => null);
+      // runQuery returns array of results; count whether any document present
+      const hasDocs = Array.isArray(data) && data.some((item) => item.document);
+      return { ok: true, count: hasDocs ? 1 : 0, raw: data };
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return { ok: false, error: `timeout after ${timeoutMs}ms` };
+      }
+      return { ok: false, error: err?.message || String(err) };
+    }
+  }
+
   window.appDb = {
     isConfigured,
     ensureUserDocument,
@@ -2054,6 +2104,7 @@
     listUserReturnRequests,
     watchUserReturnRequests,
     testConnection,
+    testConnectionRest,
     queueEmail
   };
 })();
