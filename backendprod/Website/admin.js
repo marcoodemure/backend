@@ -69,13 +69,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  // ensure the user is signed in and has admin role when accessing panel
-  const signedIn = auth.getCurrentUser();
+  // wait for Firebase auth state in case it hasn't hydrated yet
+  async function waitForAuthUser(timeoutMs = 4000) {
+    return new Promise((resolve) => {
+      const existing = auth.getCurrentUser();
+      if (existing) {
+        resolve(existing);
+        return;
+      }
+      const unsub = auth.onAuthStateChanged((u) => {
+        unsub();
+        resolve(u);
+      });
+      // fallback just in case the listener never fires
+      setTimeout(() => {
+        try { unsub(); } catch {};
+        resolve(auth.getCurrentUser());
+      }, timeoutMs);
+    });
+  }
+
+  let signedIn = await waitForAuthUser();
   if (!signedIn || !signedIn.uid) {
-    // not logged in, drop back to login page
+    // not logged in, go back to login
     window.location.href = "admin.html";
     return;
   }
+
   try {
     const profile = await appDb.ensureUserDocument(signedIn);
     if (profile?.role !== "admin") {
@@ -83,9 +103,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.location.href = "admin.html";
       return;
     }
+    // show the signed-in user in UI
+    await renderUserPanel(signedIn);
   } catch (err) {
     console.error("Failed to verify admin role", err);
-    // redirect any uncertainty back to login
     window.location.href = "admin.html";
     return;
   }
