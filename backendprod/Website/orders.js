@@ -27,7 +27,12 @@
       const u = auth.getCurrentUser();
       if (u) return u;
     }
-    return readJson("currentUser", null);
+    const fallback = readJson("currentUser", null);
+    if (!fallback) return null;
+    return {
+      ...fallback,
+      role: fallback.role || localStorage.getItem("userRole") || ""
+    };
   }
 
   function setOrdersFeedback(type, message) {
@@ -140,19 +145,35 @@
   async function syncUserAndProfile() {
     let user = auth && typeof auth.getCurrentUser === "function" ? auth.getCurrentUser() : null;
 
+    if (!user && auth && typeof auth.waitForAuthState === "function") {
+      user = await auth.waitForAuthState(5000);
+    }
+
     if (user && isRemoteDbReady() && user.uid) {
       try {
         const profile = await appDb.ensureUserDocument(user);
-        // optionally store role in localstorage
-        if (profile && profile.role) {
-          try { localStorage.setItem('userRole', profile.role); } catch (e) {}
+        if (profile) {
+          try {
+            localStorage.setItem("userRole", profile.role || "customer");
+          } catch (e) {}
+          return {
+            ...user,
+            role: profile.role || "customer"
+          };
         }
       } catch (error) {
         console.error("Failed to sync user profile", error);
       }
     }
 
-    return user;
+    if (user) {
+      return {
+        ...user,
+        role: user.role || localStorage.getItem("userRole") || ""
+      };
+    }
+
+    return null;
   }
 
   async function loadProducts() {
@@ -234,10 +255,12 @@
             await auth.signOut();
           } else {
             localStorage.removeItem("currentUser");
+            localStorage.removeItem("userRole");
           }
         } catch (error) {
           console.error("Failed to sign out", error);
           localStorage.removeItem("currentUser");
+          localStorage.removeItem("userRole");
         }
 
         window.location.reload();

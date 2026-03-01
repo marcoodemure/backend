@@ -96,9 +96,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function getCurrentUser() {
     if (auth) {
-      return auth.getCurrentUser();
+      const user = auth.getCurrentUser();
+      if (user) {
+        return {
+          ...user,
+          role: user.role || localStorage.getItem("userRole") || ""
+        };
+      }
     }
-    return readJson("currentUser", null);
+    const fallback = readJson("currentUser", null);
+    if (!fallback) return null;
+    return {
+      ...fallback,
+      role: fallback.role || localStorage.getItem("userRole") || ""
+    };
   }
 
   // local user helpers left intact in case existing flows require them
@@ -1066,18 +1077,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function syncUserAndProfile() {
     let user = getCurrentUser();
 
+    if (!user && auth && typeof auth.waitForAuthState === "function") {
+      user = await auth.waitForAuthState(5000);
+    }
+
     if (user && isRemoteDbReady() && user.uid) {
       try {
         const profile = await appDb.ensureUserDocument(user);
-        if (profile && profile.role) {
-          try { localStorage.setItem('userRole', profile.role); } catch (e) {}
+        if (profile) {
+          try { localStorage.setItem("userRole", profile.role || "customer"); } catch (e) {}
+          return {
+            ...user,
+            role: profile.role || "customer"
+          };
         }
       } catch (error) {
         console.error("Failed to sync user profile", error);
       }
     }
 
-    return user;
+    if (user) {
+      return {
+        ...user,
+        role: user.role || localStorage.getItem("userRole") || ""
+      };
+    }
+
+    return null;
   }
 
   async function loadProducts() {
@@ -1460,10 +1486,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             await auth.signOut();
           } else {
             localStorage.removeItem("currentUser");
+            localStorage.removeItem("userRole");
           }
         } catch (error) {
           console.error("Failed to sign out", error);
           localStorage.removeItem("currentUser");
+          localStorage.removeItem("userRole");
         }
 
         window.location.reload();

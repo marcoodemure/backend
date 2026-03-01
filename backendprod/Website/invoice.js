@@ -124,6 +124,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   let user = auth.getCurrentUser();
+  if (!user?.uid && typeof auth.waitForAuthState === "function") {
+    user = await auth.waitForAuthState(5000);
+  }
 
   if (!user || !user.uid) {
     setFeedback("error", "Sign in first to view invoices.");
@@ -131,11 +134,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  let resolvedRole = localStorage.getItem("userRole") || "";
   try {
     const profile = await appDb.ensureUserDocument(user);
-    // optionally store role in localstorage
-    if (profile && profile.role) {
-      try { localStorage.setItem('userRole', profile.role); } catch (e) {}
+    if (profile) {
+      resolvedRole = profile.role || "customer";
+      try { localStorage.setItem("userRole", resolvedRole); } catch (e) {}
     }
   } catch (error) {
     console.error("Failed to sync invoice user profile", error);
@@ -152,7 +156,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const targetUid = orderUid || user.uid;
-  if (user.role !== "admin" && targetUid !== user.uid) {
+  if (resolvedRole !== "admin" && targetUid !== user.uid) {
     setFeedback("error", "You cannot open this invoice.");
     invoiceCard.innerHTML = "<p>Access denied for this invoice.</p>";
     return;

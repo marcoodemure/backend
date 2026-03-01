@@ -40,17 +40,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  if (!appDb || !appDb.isConfigured()) {
+    setError("Database service is not available.");
+    if (loginBtn) loginBtn.disabled = true;
+    return;
+  }
+
+  async function resolveCurrentUser() {
+    if (typeof auth.waitForAuthState === "function") {
+      return auth.waitForAuthState(5000);
+    }
+    return auth.getCurrentUser();
+  }
+
   // if already signed in, skip form and go to panel
-  const existing = auth.getCurrentUser();
+  const existing = await resolveCurrentUser();
   if (existing && existing.uid) {
     try {
-      if (appDb && appDb.isConfigured()) {
-        const profile = await appDb.ensureUserDocument(existing);
-        if (profile?.role === "admin") {
-          window.location.href = "panel.html";
-          return;
-        }
+      const profile = await appDb.ensureUserDocument(existing);
+      if (profile?.role === "admin") {
+        window.location.href = "panel.html";
+        return;
       }
+      await auth.signOut();
+      setError("Current signed-in account is not an admin. Please sign in with an admin account.");
     } catch (err) {
       console.error("Error checking existing admin role", err);
       // fall through to show login form
@@ -73,14 +86,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       try {
         const credential = await auth.signIn(email, password);
 
-        // verify role if we can reach the database
-        if (appDb && appDb.isConfigured()) {
-          const profile = await appDb.ensureUserDocument(credential.user);
-          if (profile?.role !== "admin") {
-            await auth.signOut();
-            setError("Account is not authorized as admin.");
-            return;
-          }
+        const profile = await appDb.ensureUserDocument(credential.user);
+        if (profile?.role !== "admin") {
+          await auth.signOut();
+          setError("Account is not authorized as admin.");
+          return;
         }
 
         window.location.href = "panel.html";

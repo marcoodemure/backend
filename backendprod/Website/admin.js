@@ -59,6 +59,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const returnModalBody = document.getElementById("returnModalBody");
   const returnModalCloseBtn = document.getElementById("returnModalCloseBtn");
 
+  // Defensive guard: never allow native form submit to reload this page.
+  if (productForm) {
+    productForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+    }, true);
+  }
+
   if (!adminContent || !adminUnauthorized || !adminUserPanel || !productForm || !adminProductsList || !adminOrdersList) {
     console.error("admin.js: required elements are missing");
     return;
@@ -1271,11 +1278,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function resolveUserWithRole(user) {
     const profile = await appDb.ensureUserDocument(user);
     if (!profile) return user;
-    // optionally store role in localstorage
     try {
       localStorage.setItem('userRole', profile.role || 'customer');
     } catch (e) {}
-    return user;
+    return {
+      ...user,
+      role: profile.role || "customer"
+    };
   }
 
   async function handleAdminAccess(user, loginMessage) {
@@ -1298,7 +1307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    if (resolvedUser.role !== "admin") {
+    if ((resolvedUser?.role || "").toLowerCase() !== "admin") {
       await auth.signOut();
       await renderUserPanel(null);
       showLoginWall("This account is not an admin.");
@@ -1417,6 +1426,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   productForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    const currentUser = getCurrentUser();
+    if (!currentUser?.uid) {
+      showToast("Please sign in as admin first.", "error");
+      window.location.href = "admin.html";
+      return;
+    }
+
     const id = Number(productIdInput.value);
     const name = productNameInput.value.trim();
     const size = productSizeInput.value.trim();
@@ -1431,21 +1447,34 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
+    if (!appDb || !appDb.isConfigured()) {
+      showToast("Database is not configured. Cannot save product.", "error");
+      console.error("appDb is not available");
+      return;
+    }
+
     try {
+      console.log("Attempting to save product", { id, name });
       await appDb.upsertProduct({ id, name, size, price, image, stock, category: category || "General", tags, isActive: true });
+      console.log("Product saved successfully");
       resetProductForm({ keepLink: true });
       showProductLink(id);
       showToast(`Saved product #${id}.`, "success");
     } catch (error) {
       console.error("Failed to save product", error);
-      showToast("Failed to save product.", "error");
+      const message = error?.code === "permission-denied"
+        ? "Permission denied: this account is not authorized to write products."
+        : (error?.message || String(error) || "Failed to save product.");
+      showToast(message, "error");
     }
   });
 
-  adminStatusFilter.addEventListener("change", () => {
-    currentOrdersPage = 1;
-    renderOrders(allOrders);
-  });
+  if (adminStatusFilter) {
+    adminStatusFilter.addEventListener("change", () => {
+      currentOrdersPage = 1;
+      renderOrders(allOrders);
+    });
+  }
 
   if (adminProductSearch) adminProductSearch.addEventListener("input", () => renderProducts(allProducts));
   if (adminStockFilter) adminStockFilter.addEventListener("change", () => renderProducts(allProducts));

@@ -192,7 +192,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  const user = auth.getCurrentUser();
+  let user = auth.getCurrentUser();
+  if (!user?.uid && typeof auth.waitForAuthState === "function") {
+    user = await auth.waitForAuthState(5000);
+  }
 
   if (!user?.uid) {
     setFeedback("error", "Please sign in first.");
