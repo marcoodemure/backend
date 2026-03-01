@@ -107,15 +107,23 @@
     return new Promise((resolve) => {
       let unsubscribe = () => {};
       let completed = false;
+      let timeoutId = null;
 
       const finish = (value) => {
         if (completed) {
           return;
         }
         completed = true;
+        if (timeoutId) clearTimeout(timeoutId);
         unsubscribe();
         resolve(value);
       };
+
+      // Set a timeout to prevent hanging indefinitely
+      timeoutId = setTimeout(() => {
+        console.warn("Auth state sync timed out after 5 seconds, using cached user");
+        finish(getCurrentUser());
+      }, 5000);
 
       unsubscribe = auth.onAuthStateChanged(
         (authUser) => {

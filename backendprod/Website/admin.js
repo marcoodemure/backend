@@ -1339,7 +1339,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const auth = appAuth.getAuthInstance();
       if (!auth) {
-        setLoginError("Authentication is unavailable.");
+        setLoginError("Authentication is unavailable. Please refresh the page.");
         return;
       }
 
@@ -1347,7 +1347,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (adminLoginBtn) adminLoginBtn.disabled = true;
 
       try {
-        await auth.signInWithEmailAndPassword(email, password);
+        const signInPromise = auth.signInWithEmailAndPassword(email, password);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Sign in request timed out. Please check your connection.")), 10000)
+        );
+        await Promise.race([signInPromise, timeoutPromise]);
+
         await appAuth.syncCurrentUser();
         await handleAdminAccess(getCurrentUser(), "");
         if (adminPasswordInput) adminPasswordInput.value = "";

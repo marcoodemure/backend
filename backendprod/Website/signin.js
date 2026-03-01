@@ -93,20 +93,40 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const auth = appAuth.getAuthInstance();
+    if (!auth) {
+      alert("Authentication service is not available. Please refresh the page.");
+      return;
+    }
+
     signinBtn.disabled = true;
 
     try {
-      const credential = await auth.signInWithEmailAndPassword(email, password);
+      const signInPromise = auth.signInWithEmailAndPassword(email, password);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("auth/timeout")), 15000)
+      );
+      const credential = await Promise.race([signInPromise, timeoutPromise]);
+      
       const localUser = appAuth.upsertLocalUser(credential.user);
       if (appDb && appDb.isConfigured()) {
-        const profile = await appDb.ensureUserDocument(localUser || credential.user);
-        if (profile) {
-          appAuth.updateCurrentUser({ role: profile.role || "customer" });
+        try {
+          const profile = await appDb.ensureUserDocument(localUser || credential.user);
+          if (profile) {
+            appAuth.updateCurrentUser({ role: profile.role || "customer" });
+          }
+        } catch (dbError) {
+          console.error("Failed to sync user document:", dbError);
+          // Continue anyway - user is authenticated
         }
       }
       window.location.href = getRedirectUrl();
     } catch (error) {
-      alert(formatSignInError(error));
+      console.error("Sign in failed:", error);
+      if (error.message === "auth/timeout") {
+        alert("Sign in request timed out. Please check your internet connection and try again.");
+      } else {
+        alert(formatSignInError(error));
+      }
     } finally {
       signinBtn.disabled = false;
     }

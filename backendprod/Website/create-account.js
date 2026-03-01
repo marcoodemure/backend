@@ -91,20 +91,40 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const auth = appAuth.getAuthInstance();
+    if (!auth) {
+      alert("Authentication service is not available. Please refresh the page.");
+      return;
+    }
+
     createBtn.disabled = true;
 
     try {
-      const credential = await auth.createUserWithEmailAndPassword(email, password);
+      const createPromise = auth.createUserWithEmailAndPassword(email, password);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("auth/timeout")), 15000)
+      );
+      const credential = await Promise.race([createPromise, timeoutPromise]);
+      
       const localUser = appAuth.upsertLocalUser(credential.user);
       if (appDb && appDb.isConfigured()) {
-        const profile = await appDb.ensureUserDocument(localUser || credential.user);
-        if (profile) {
-          appAuth.updateCurrentUser({ role: profile.role || "customer" });
+        try {
+          const profile = await appDb.ensureUserDocument(localUser || credential.user);
+          if (profile) {
+            appAuth.updateCurrentUser({ role: profile.role || "customer" });
+          }
+        } catch (dbError) {
+          console.error("Failed to sync user document:", dbError);
+          // Continue anyway - user is authenticated
         }
       }
       window.location.href = getRedirectUrl();
     } catch (error) {
-      alert(formatCreateError(error));
+      console.error("Account creation failed:", error);
+      if (error.message === "auth/timeout") {
+        alert("Request timed out. Please check your internet connection and try again.");
+      } else {
+        alert(formatCreateError(error));
+      }
     } finally {
       createBtn.disabled = false;
     }
