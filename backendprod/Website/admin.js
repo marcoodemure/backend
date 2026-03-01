@@ -780,13 +780,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       const stockState = getStockState(product.stock);
       const tags = Array.isArray(product.tags) && product.tags.length ? product.tags.join(", ") : "No tags";
       const category = product.category || "General";
+      const thumbUrl = product.image || "";
 
       const card = document.createElement("div");
-      card.className = "admin-item";
+      card.className = "admin-item product-card";
       card.innerHTML = `
-        <div class="admin-item-main">
+        <div class="product-thumb-wrap">
+          ${thumbUrl ? `<img class="product-thumb" src="${thumbUrl}" alt="${product.name || ''}">` : `<div class="product-thumb placeholder">No image</div>`}
+        </div>
+        <div class="admin-item-main product-info">
           <strong>#${product.id} - ${product.name}</strong>
-          <span>Category: ${category} | Size: ${product.size} | Price: ${formatMoney(product.price)}</span>
+          <span>Category: ${category}</span>
+          <span>Size: ${product.size || 'N/A'}</span>
+          <span>Price: ${formatMoney(product.price)}</span>
+          <span>Stock: ${product.stock ?? 'N/A'}</span>
+          <span>Image URL: <a href="${thumbUrl}" target="_blank" rel="noopener noreferrer">${thumbUrl || 'none'}</a></span>
           <span>Tags: ${tags}</span>
           <span class="stock-pill ${stockState.className}">${stockState.label}</span>
         </div>
