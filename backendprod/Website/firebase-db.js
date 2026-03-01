@@ -1980,18 +1980,31 @@
   }
 
   // Lightweight test helper to verify Firestore connectivity and basic read
-  async function testConnection() {
+  async function testConnection(timeoutMs = 10000) {
     const db = getDbInstance();
     if (!db) {
       return { ok: false, error: "Firestore is not initialized" };
     }
 
+    const getPromise = (async () => {
+      try {
+        const snapshot = await db.collection("products").limit(1).get();
+        return { ok: true, count: snapshot.size };
+      } catch (error) {
+        console.error("Firestore testConnection failed", error);
+        return { ok: false, error: error?.message || String(error) };
+      }
+    })();
+
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => resolve({ ok: false, error: `timeout after ${timeoutMs}ms` }), timeoutMs);
+    });
+
     try {
-      const snapshot = await db.collection("products").limit(1).get();
-      return { ok: true, count: snapshot.size };
-    } catch (error) {
-      console.error("Firestore testConnection failed", error);
-      return { ok: false, error: error?.message || String(error) };
+      const result = await Promise.race([getPromise, timeoutPromise]);
+      return result;
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
     }
   }
 
