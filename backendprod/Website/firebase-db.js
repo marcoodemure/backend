@@ -1979,6 +1979,22 @@
       );
   }
 
+  // Lightweight test helper to verify Firestore connectivity and basic read
+  async function testConnection() {
+    const db = getDbInstance();
+    if (!db) {
+      return { ok: false, error: "Firestore is not initialized" };
+    }
+
+    try {
+      const snapshot = await db.collection("products").limit(1).get();
+      return { ok: true, count: snapshot.size };
+    } catch (error) {
+      console.error("Firestore testConnection failed", error);
+      return { ok: false, error: error?.message || String(error) };
+    }
+  }
+
   window.appDb = {
     isConfigured,
     ensureUserDocument,
@@ -2018,6 +2034,7 @@
     watchReturnRequests,
     listUserReturnRequests,
     watchUserReturnRequests,
+    testConnection,
     queueEmail
   };
 })();
