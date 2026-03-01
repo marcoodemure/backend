@@ -81,30 +81,40 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // wait for Firebase auth state in case it hasn't hydrated yet
   async function waitForAuthUser(timeoutMs = 7000) {
-    const cached = auth.getCurrentUser();
-    if (cached?.uid) {
-      return cached;
-    }
-
     if (typeof auth.waitForAuthState === "function") {
-      return auth.waitForAuthState(Math.min(2500, Math.max(1, Number(timeoutMs) || 2500)));
+      const resolved = await auth.waitForAuthState(Math.max(1500, Number(timeoutMs) || 7000));
+      if (resolved?.uid) {
+        return resolved;
+      }
     }
 
     return new Promise((resolve) => {
-      const existing = auth.getCurrentUser();
-      if (existing) {
-        resolve(existing);
+      const live = window.firebaseAuth?.currentUser || null;
+      if (live?.uid) {
+        resolve({ uid: live.uid, email: live.email || "", role: "" });
         return;
       }
+
+      if (typeof auth.onAuthStateChanged !== "function") {
+        resolve(null);
+        return;
+      }
+
       const unsub = auth.onAuthStateChanged((u) => {
+        if (!u?.uid) return;
         unsub();
         resolve(u);
       });
       // fallback just in case the listener never fires
       setTimeout(() => {
-        try { unsub(); } catch {};
-        resolve(auth.getCurrentUser());
-      }, timeoutMs);
+        try { unsub(); } catch {}
+        const latest = window.firebaseAuth?.currentUser || null;
+        if (latest?.uid) {
+          resolve({ uid: latest.uid, email: latest.email || "", role: "" });
+          return;
+        }
+        resolve(null);
+      }, Math.max(1500, Number(timeoutMs) || 7000));
     });
   }
 
@@ -119,6 +129,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const ORDERS_PAGE_SIZE = 8;
   const INITIAL_ORDERS_LIMIT = 80;
   const ANALYTICS_MIN_REFRESH_MS = 15000;
+  const ORDERS_ENABLED = false;
   const ROLE_CACHE_KEY = "adminRoleCacheV1";
   const ROLE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -593,6 +604,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function refreshBackendAnalyticsSummary() {
+    if (!ORDERS_ENABLED) {
+      backendAnalyticsSummary = null;
+      return;
+    }
     if (typeof appDb.getAnalyticsSummary !== "function") {
       return;
     }
@@ -600,7 +615,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       backendAnalyticsSummary = await appDb.getAnalyticsSummary({ days: 30 });
     } catch (error) {
-      console.error("Failed to load backend analytics summary", error);
+      const denied = String(error?.code || "") === "permission-denied";
+      if (denied) {
+        console.warn("Analytics summary denied by Firestore rules. Admin role/session may be missing.");
+      } else {
+        console.error("Failed to load backend analytics summary", error);
+      }
       backendAnalyticsSummary = null;
     }
   }
@@ -1414,19 +1434,33 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     );
 
-    stopOrders = appDb.watchAllOrders(
-      (orders) => {
-        renderOrders(orders);
-        scheduleAnalyticsRefresh(1200, false);
-      },
-      (error) => {
-        console.error("Order listener error", error);
-        adminOrdersList.innerHTML = "<p>Failed to load orders.</p>";
-      },
-      { limitCount: INITIAL_ORDERS_LIMIT }
-    );
+    if (ORDERS_ENABLED) {
+      stopOrders = appDb.watchAllOrders(
+        (orders) => {
+          renderOrders(orders);
+          scheduleAnalyticsRefresh(1200, false);
+        },
+        (error) => {
+          console.error("Order listener error", error);
+          const denied = String(error?.code || "") === "permission-denied";
+          adminOrdersList.innerHTML = denied
+            ? "<p>Permission denied loading orders. Sign out/in and ensure users/&lt;uid&gt;.role is admin in Firestore.</p>"
+            : "<p>Failed to load orders.</p>";
+        },
+        { limitCount: INITIAL_ORDERS_LIMIT }
+      );
 
-    scheduleAnalyticsRefresh(500, true);
+      scheduleAnalyticsRefresh(500, true);
+    } else {
+      allOrders = [];
+      filteredOrders = [];
+      if (adminOrdersList) {
+        adminOrdersList.innerHTML = "<p>Orders module disabled.</p>";
+      }
+      if (adminOrdersPagination) {
+        adminOrdersPagination.innerHTML = "";
+      }
+    }
     deferredListenersTimer = setTimeout(() => {
       deferredListenersTimer = null;
       startDeferredRealtimeListeners(user);
@@ -1545,7 +1579,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderMetrics();
     setSkeleton(adminNotificationsList, 3);
     setSkeleton(adminProductsList, 4);
-    setSkeleton(adminOrdersList, 4);
+    if (ORDERS_ENABLED) {
+      setSkeleton(adminOrdersList, 4);
+    } else if (adminOrdersList) {
+      adminOrdersList.innerHTML = "<p>Orders module disabled.</p>";
+      if (adminOrdersPagination) adminOrdersPagination.innerHTML = "";
+    }
     setSkeleton(adminReturnRequests, 3);
     startRealtimeListeners(resolvedUser);
   }
@@ -1681,15 +1720,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     setProductFormStatus("Saving product...", "info");
 
     try {
-      const immediateSessionUser = getCurrentUser();
-      const sessionUser = immediateSessionUser?.uid
-        ? immediateSessionUser
-        : await withTimeout(
-            typeof auth.waitForAuthState === "function" ? auth.waitForAuthState(2500) : Promise.resolve(getCurrentUser()),
-            3500,
-            "auth_timeout",
-            "Authentication check timed out."
-          );
+      const sessionUser = await withTimeout(
+        waitForAuthUser(5000),
+        7000,
+        "auth_timeout",
+        "Authentication check timed out."
+      );
       if (!sessionUser?.uid) {
         const err = new Error("auth_required");
         err.code = "auth_required";

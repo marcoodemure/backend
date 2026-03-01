@@ -42,6 +42,12 @@ service cloud.firestore {
       }
     }
 
+    // Required for collectionGroup("orders") admin queries in panel analytics/listeners.
+    match /{path=**}/orders/{orderId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /carts/{uid} {
       allow read, write: if isOwner(uid) || isAdmin();
     }

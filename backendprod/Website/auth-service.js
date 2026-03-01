@@ -124,7 +124,7 @@
       },
       (error) => {
         console.error("Auth state listener failed", error);
-        cb(getCurrentUser());
+        cb(toUserSnapshot(auth.currentUser));
       }
     );
   }
@@ -134,11 +134,6 @@
     if (!auth) return Promise.resolve(null);
 
     ensureBootstrapListener();
-
-    const immediate = getCurrentUser();
-    if (immediate?.uid) {
-      return Promise.resolve(immediate);
-    }
 
     const existing = auth.currentUser;
     if (existing?.uid) {
@@ -162,10 +157,10 @@
 
       unsubscribe = auth.onAuthStateChanged(
         (user) => finish(toUserSnapshot(user)),
-        () => finish(getCurrentUser())
+        () => finish(toUserSnapshot(auth.currentUser))
       );
 
-      timer = setTimeout(() => finish(getCurrentUser()), safeTimeout);
+      timer = setTimeout(() => finish(toUserSnapshot(auth.currentUser)), safeTimeout);
     });
   }
 
