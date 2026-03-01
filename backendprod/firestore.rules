@@ -18,8 +18,20 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow create: if isOwner(uid);
-      allow read, update: if isOwner(uid) || isAdmin();
+      // Owners can create their own profile, but cannot self-assign admin role.
+      allow create: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role == "customer";
+
+      allow read: if isOwner(uid) || isAdmin();
+
+      // Owners can update their own profile fields, but cannot change uid/role.
+      allow update: if isAdmin() || (
+        isOwner(uid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+      );
+
       allow delete: if false;
 
       match /orders/{orderId} {
@@ -56,12 +68,19 @@ service cloud.firestore {
     }
 
     match /return_requests/{requestId} {
-      allow create, read, update: if signedIn();
+      allow create: if signedIn() && request.resource.data.requesterUid == request.auth.uid;
+      allow read, update: if signedIn() && (
+        resource.data.requesterUid == request.auth.uid
+        || isAdmin()
+      );
       allow delete: if false;
     }
 
     match /notifications/{notificationId} {
-      allow create: if signedIn();
+      allow create: if signedIn() && (
+        request.resource.data.uid == request.auth.uid
+        || isAdmin()
+      );
       allow read, update: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow delete: if false;
     }
