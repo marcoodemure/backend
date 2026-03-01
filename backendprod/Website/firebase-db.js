@@ -1,5 +1,6 @@
 (function () {
   let cachedDb = null;
+  let firestoreSettingsApplied = false;
 
   function getDbInstance() {
     if (cachedDb) {
@@ -41,12 +42,16 @@
 
       // Helps on restrictive networks/incognito where websocket streams may fail.
       try {
-        db.settings({
-          experimentalAutoDetectLongPolling: true,
-          useFetchStreams: false
-        });
+        if (!firestoreSettingsApplied) {
+          db.settings({
+            experimentalAutoDetectLongPolling: true,
+            useFetchStreams: false
+          });
+          firestoreSettingsApplied = true;
+        }
       } catch (settingsError) {
         // Firestore settings can only be set once before first use.
+        // Swallow the error since settings may already be applied by other code paths.
       }
 
       cachedDb = db;
