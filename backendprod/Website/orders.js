@@ -447,11 +447,12 @@
             ? `https://www.openstreetmap.org/?mlat=${encodeURIComponent(Number(order.shippingLocation.lat))}&mlon=${encodeURIComponent(Number(order.shippingLocation.lng))}#map=18/${encodeURIComponent(Number(order.shippingLocation.lat))}/${encodeURIComponent(Number(order.shippingLocation.lng))}`
             : ""
         );
-      const mapPreviewHtml = mapLinkUrl
+      const showPinnedLocation = order.deliveryMethod !== "pickup" && Boolean(mapLinkUrl);
+      const mapPreviewHtml = showPinnedLocation
         ? `
           <div class="order-map-preview">
-            <a href="${mapLinkUrl}" target="_blank" rel="noopener noreferrer">Pinned house location</a>
-            ${mapSnapshotUrl ? `<img src="${mapSnapshotUrl}" alt="Pinned house map preview" onerror="this.style.display='none'">` : ""}
+            <a href="${mapLinkUrl}" target="_blank" rel="noopener noreferrer">Pinned delivery location</a>
+            ${mapSnapshotUrl ? `<img src="${mapSnapshotUrl}" alt="Pinned delivery map preview" onerror="this.style.display='none'">` : ""}
           </div>
         `
         : "";

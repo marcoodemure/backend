@@ -43,12 +43,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const qrPaymentOpenScanBtn = document.getElementById("qrPaymentOpenScanBtn");
   const qrPaymentCancelBtn = document.getElementById("qrPaymentCancelBtn");
   const orderNotesInput = document.getElementById("orderNotesInput");
-  const checkoutCategoryFilter = document.getElementById("checkoutCategoryFilter");
-  const checkoutTagFilter = document.getElementById("checkoutTagFilter");
-  const checkoutMinPriceFilter = document.getElementById("checkoutMinPriceFilter");
-  const checkoutMaxPriceFilter = document.getElementById("checkoutMaxPriceFilter");
-  const checkoutTagChips = document.getElementById("checkoutTagChips");
-  const checkoutProductSelect = document.getElementById("checkoutProductSelect");
 
   const countryInput = document.getElementById("countryInput");
   const firstNameInput = document.getElementById("firstNameInput");
@@ -83,6 +77,26 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const auth = window.authService;
   const appDb = window.appDb;
+
+  const requiredElements = {
+    shipBtn,
+    pickupBtn,
+    shippingSection,
+    pickupSection,
+    shipToAddressLink,
+    payBtn,
+    cartSummary,
+    userStatus,
+    emailInput,
+    orderComplete
+  };
+  const missingRequired = Object.entries(requiredElements)
+    .filter(([, element]) => !element)
+    .map(([name]) => name);
+  if (missingRequired.length) {
+    console.error("checkout.js: missing required elements", missingRequired);
+    return;
+  }
 
   function readJson(key, fallback) {
     try {
@@ -1106,33 +1120,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     return null;
   }
 
-  async function loadProducts() {
-    if (isRemoteDbReady()) {
+  async function loadProductById(productId) {
+    const safeId = Number(productId);
+    if (!Number.isFinite(safeId) || safeId <= 0) {
+      return null;
+    }
+
+    if (isRemoteDbReady() && typeof appDb.getProductById === "function") {
       try {
-        const remoteProducts = await appDb.listProducts();
-        if (remoteProducts.length) {
-          return remoteProducts;
+        const remoteProduct = await appDb.getProductById(safeId);
+        if (remoteProduct) {
+          return remoteProduct;
         }
       } catch (error) {
-        console.error("Failed to load products from Firestore", error);
+        console.error("Failed to load product from Firestore", error);
       }
     }
 
     try {
       const response = await fetch("products.json");
-      return await response.json();
+      const list = await response.json();
+      if (!Array.isArray(list)) {
+        return null;
+      }
+      return list.find((item) => Number(item?.id) === safeId) || null;
     } catch (error) {
-      console.error("Failed to load products.json", error);
-      return [];
+      console.error("Failed to load fallback products.json", error);
+      return null;
     }
   }
 
   let pendingDraft = readJson("pendingOrderDraft", null);
-  const fallbackCartProductId = Number(localStorage.getItem("cartProductId"));
-  const resolvedProductId = requestedProductId || Number(pendingDraft?.productId) || fallbackCartProductId;
+  const resolvedProductId = Number.isFinite(requestedProductId) && requestedProductId > 0
+    ? requestedProductId
+    : 0;
 
   if (!resolvedProductId) {
-    cartSummary.innerHTML = "<p>No product selected.</p>";
+    cartSummary.innerHTML = "<p>Missing product_id in URL. Open checkout using checkout.html?product_id=YOUR_ID.</p>";
     payBtn.disabled = true;
     return;
   }
@@ -1145,8 +1169,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   let stopPaymentSessionWatch = null;
   let paymentFinalizing = false;
   let payButtonLoading = false;
-  let products = [];
-  let activeTagChip = "";
   let addressMap = null;
   let addressMapMarker = null;
   let addressMapDebounce = null;
@@ -1652,110 +1674,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     return placeOrderLocal(draft);
   }
 
-  function getFilteredProducts(source) {
-    const category = (checkoutCategoryFilter?.value || "all").toLowerCase();
-    const tagText = (checkoutTagFilter?.value || "").trim().toLowerCase();
-    const minPrice = Number(checkoutMinPriceFilter?.value);
-    const maxPrice = Number(checkoutMaxPriceFilter?.value);
-    const chip = activeTagChip.toLowerCase();
-
-    return source.filter((item) => {
-      const itemCategory = String(item.category || "general").toLowerCase();
-      const itemTags = Array.isArray(item.tags) ? item.tags.map((tag) => String(tag).toLowerCase()) : [];
-      const price = Number(item.price) || 0;
-
-      if (category !== "all" && itemCategory !== category) return false;
-      if (tagText && !itemTags.some((tag) => tag.includes(tagText))) return false;
-      if (chip && !itemTags.includes(chip)) return false;
-      if (Number.isFinite(minPrice) && price < minPrice) return false;
-      if (Number.isFinite(maxPrice) && price > maxPrice) return false;
-      return true;
-    });
-  }
-
-  function renderTagChips(source) {
-    if (!checkoutTagChips) return;
-    const tags = Array.from(new Set(source.flatMap((item) => Array.isArray(item.tags) ? item.tags : [])))
-      .map((tag) => String(tag).trim().toLowerCase())
-      .filter(Boolean)
-      .slice(0, 30);
-
-    checkoutTagChips.innerHTML = "";
-    tags.forEach((tag) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `tag-chip${activeTagChip === tag ? " active" : ""}`;
-      btn.textContent = tag;
-      btn.addEventListener("click", () => {
-        activeTagChip = activeTagChip === tag ? "" : tag;
-        renderTagChips(products);
-        renderProductSelect(products);
-      });
-      checkoutTagChips.appendChild(btn);
-    });
-  }
-
-  function renderCategoryFilter(source) {
-    if (!checkoutCategoryFilter) return;
-    const categories = Array.from(new Set(source.map((item) => String(item.category || "General").trim()).filter(Boolean)))
-      .sort((a, b) => a.localeCompare(b));
-
-    const existingValue = checkoutCategoryFilter.value || "all";
-    checkoutCategoryFilter.innerHTML = `<option value="all">All categories</option>`;
-    categories.forEach((category) => {
-      const opt = document.createElement("option");
-      opt.value = category.toLowerCase();
-      opt.textContent = category;
-      checkoutCategoryFilter.appendChild(opt);
-    });
-    checkoutCategoryFilter.value = categories.map((item) => item.toLowerCase()).includes(existingValue) ? existingValue : "all";
-  }
-
-  function setActiveProduct(nextProductId) {
-    const next = products.find((item) => Number(item.id) === Number(nextProductId));
-    if (!next) return;
-    product = next;
-    quantity = 1;
-    localStorage.setItem("cartProductId", String(next.id));
-    window.history.replaceState({}, "", `checkout.html?product_id=${next.id}`);
-    renderCart();
-    persistCartState().catch((error) => console.error("Failed to persist cart", error));
-  }
-
-  function renderProductSelect(source) {
-    if (!checkoutProductSelect) return;
-    const filtered = getFilteredProducts(source);
-
-    checkoutProductSelect.innerHTML = "";
-    if (!filtered.length) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "No products match filters";
-      checkoutProductSelect.appendChild(opt);
-      payBtn.disabled = true;
-      return;
-    }
-
-    filtered
-      .sort((a, b) => Number(a.id) - Number(b.id))
-      .forEach((item) => {
-        const opt = document.createElement("option");
-        opt.value = String(item.id);
-        opt.textContent = `#${item.id} ${item.name} (${formatMoney(item.price)})`;
-        checkoutProductSelect.appendChild(opt);
-      });
-
-    const currentId = String(product?.id || "");
-    const hasCurrent = filtered.some((item) => String(item.id) === currentId);
-    checkoutProductSelect.value = hasCurrent ? currentId : String(filtered[0].id);
-
-    if (!hasCurrent) {
-      setActiveProduct(filtered[0].id);
-    } else {
-      payBtn.disabled = false;
-    }
-  }
-
   async function startMockQrPayment(orderDraft) {
     const user = getCurrentUser();
     if (!user) {
@@ -2013,17 +1931,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  products = await loadProducts();
-  if (!products.length) {
-    cartSummary.innerHTML = "<p>Failed to load products.</p>";
-    payBtn.disabled = true;
-    return;
-  }
-
-  product = products.find((item) => Number(item.id) === Number(resolvedProductId));
+  product = await loadProductById(resolvedProductId);
 
   if (!product) {
-    cartSummary.innerHTML = "<p>Product not found.</p>";
+    cartSummary.innerHTML = `<p>Product #${resolvedProductId} was not found.</p>`;
     payBtn.disabled = true;
     return;
   }
@@ -2080,9 +1991,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     locateTypedAddress().catch((error) => console.error("Failed to position address map on load", error));
   }
-  renderCategoryFilter(products);
-  renderTagChips(products);
-  renderProductSelect(products);
   updateDeliveryUI();
   syncPickupReferenceDisplay();
   setSavedAddressStatus("Tip: pick Home/School/Work, then save current address + pin for one-click reuse.", "info");
@@ -2093,21 +2001,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateCheckoutProgress();
   renderCart();
   await persistCartState();
-
-  if (checkoutProductSelect) {
-    checkoutProductSelect.addEventListener("change", () => {
-      const selectedId = Number(checkoutProductSelect.value);
-      if (selectedId) {
-        setActiveProduct(selectedId);
-      }
-    });
-  }
-
-  [checkoutCategoryFilter, checkoutTagFilter, checkoutMinPriceFilter, checkoutMaxPriceFilter].forEach((control) => {
-    if (!control) return;
-    control.addEventListener("input", () => renderProductSelect(products));
-    control.addEventListener("change", () => renderProductSelect(products));
-  });
 
   document.querySelectorAll('input[name="shipping"]').forEach((radio) => {
     radio.addEventListener("change", () => {

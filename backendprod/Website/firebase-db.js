@@ -145,6 +145,39 @@
     });
   }
 
+  const ORDERS_CREATED_AT_INDEX_STATE_KEY = "ordersCreatedAtCgIndexStateV1";
+
+  function isOrdersCreatedAtIndexError(error) {
+    const code = String(error?.code || "").toLowerCase();
+    const message = String(error?.message || "").toLowerCase();
+    if (code === "failed-precondition" || code === "invalid-argument") {
+      return true;
+    }
+    return message.includes("requires a collection_group")
+      || message.includes("requires an index")
+      || message.includes("query requires");
+  }
+
+  function hasCachedOrdersCreatedAtIndexMiss() {
+    try {
+      return localStorage.getItem(ORDERS_CREATED_AT_INDEX_STATE_KEY) === "missing";
+    } catch {
+      return false;
+    }
+  }
+
+  function markOrdersCreatedAtIndexMissing() {
+    try {
+      localStorage.setItem(ORDERS_CREATED_AT_INDEX_STATE_KEY, "missing");
+    } catch {}
+  }
+
+  function clearOrdersCreatedAtIndexMissingFlag() {
+    try {
+      localStorage.removeItem(ORDERS_CREATED_AT_INDEX_STATE_KEY);
+    } catch {}
+  }
+
   function toFirestoreRestValue(value) {
     if (value === null) {
       return { nullValue: null };
@@ -382,21 +415,24 @@
     const quantity = Math.max(1, Number(raw?.quantity) || 1);
     const unitPrice = Number(raw?.unitPrice) || 0;
     const shippingFee = Number(raw?.shippingFee) || 0;
+    const deliveryMethod = raw?.deliveryMethod === "pickup" ? "pickup" : "ship";
     const locationLng = sanitizeCoordinate(raw?.shippingLocation?.lng);
     const locationLat = sanitizeCoordinate(raw?.shippingLocation?.lat);
-    const shippingLocation = locationLng !== null && locationLat !== null
+    const shippingLocationRaw = locationLng !== null && locationLat !== null
       ? { lng: locationLng, lat: locationLat }
       : null;
+    const shippingLocation = deliveryMethod === "pickup" ? null : shippingLocationRaw;
     const locationSnapshotImageUrl = sanitizeString(raw?.shippingLocationSnapshot?.imageUrl, "");
     const locationSnapshotEmbedUrl = sanitizeString(raw?.shippingLocationSnapshot?.embedUrl, "");
     const locationSnapshotMapUrl = sanitizeString(raw?.shippingLocationSnapshot?.mapUrl, "");
-    const shippingLocationSnapshot = (locationSnapshotEmbedUrl || locationSnapshotImageUrl) && locationSnapshotMapUrl
+    const shippingLocationSnapshotRaw = (locationSnapshotEmbedUrl || locationSnapshotImageUrl) && locationSnapshotMapUrl
       ? {
         embedUrl: locationSnapshotEmbedUrl || locationSnapshotImageUrl,
         imageUrl: locationSnapshotImageUrl,
         mapUrl: locationSnapshotMapUrl
       }
       : null;
+    const shippingLocationSnapshot = deliveryMethod === "pickup" ? null : shippingLocationSnapshotRaw;
     const pickupDetails = raw?.pickupDetails && typeof raw.pickupDetails === "object"
       ? {
         contactName: sanitizeString(raw.pickupDetails.contactName, ""),
@@ -433,7 +469,7 @@
       shippingFee,
       shippingOption: sanitizeMethod(raw?.shippingOption, "standard_shipping"),
       paymentMethod: sanitizeMethod(raw?.paymentMethod, "cash_on_delivery"),
-      deliveryMethod: raw?.deliveryMethod === "pickup" ? "pickup" : "ship",
+      deliveryMethod,
       totalPrice: Number(raw?.totalPrice) || unitPrice * quantity + shippingFee,
       contactEmail: typeof raw?.contactEmail === "string" ? raw.contactEmail.trim() : "",
       paymentSessionId: typeof raw?.paymentSessionId === "string" ? raw.paymentSessionId.trim() : "",
@@ -441,7 +477,7 @@
       estimatedDeliveryAt: sanitizeString(raw?.estimatedDeliveryAt, ""),
       shippingLocation,
       shippingLocationSnapshot,
-      shippingLocationConfirmed: Boolean(raw?.shippingLocationConfirmed),
+      shippingLocationConfirmed: deliveryMethod === "pickup" ? false : Boolean(raw?.shippingLocationConfirmed),
       pickupDetails,
       deliveryConfidence,
       deliveryProof,
@@ -1185,11 +1221,29 @@
     );
   }
 
-  async function createOrder(uid, email, draft) {
+  async function createOrder(uid, email, draft, options) {
     const db = getDbInstance();
     if (!db || !uid) {
       return null;
     }
+
+    const authInstance = typeof window.firebase?.auth === "function"
+      ? window.firebase.auth()
+      : null;
+    const actor = authInstance?.currentUser || window.firebaseAuth?.currentUser || null;
+    const actorUid = sanitizeString(actor?.uid, "");
+    const actorEmail = sanitizeString(actor?.email, "");
+
+    let actorRole = "";
+    if (actorUid) {
+      try {
+        const profile = await getUserProfile(actorUid);
+        actorRole = sanitizeString(profile?.role, "").toLowerCase();
+      } catch (error) {
+        console.warn("createOrder: failed to resolve actor role; continuing without product stock mutation", error);
+      }
+    }
+    const canMutateProductStock = Boolean(options?.forceStockMutation) || actorRole === "admin";
 
     const safe = sanitizeDraft(draft);
     const userRef = db.collection("users").doc(uid);
@@ -1225,10 +1279,14 @@
             throw outErr;
           }
 
-          transaction.update(productRef, {
-            stock: stock - safe.quantity,
-            updatedAt: getServerTimestamp()
-          });
+          // Customer checkout must not write product documents because rules allow product writes for admins only.
+          // Admin flows can still mutate stock when role resolves to "admin".
+          if (canMutateProductStock) {
+            transaction.update(productRef, {
+              stock: stock - safe.quantity,
+              updatedAt: getServerTimestamp()
+            });
+          }
         }
       }
 
@@ -1344,14 +1402,15 @@
       eventType: "order_created",
       previousStatus: "",
       nextStatus: order.status || "pending",
-      actorUid: uid,
-      actorEmail: email || "",
-      actorRole: "customer",
+      actorUid: actorUid || uid,
+      actorEmail: actorEmail || email || "",
+      actorRole: actorRole || "customer",
       source: "checkout",
       message: "Order created from checkout flow.",
       meta: {
         paymentMethod: order.paymentMethod,
-        deliveryConfidence: order.deliveryConfidence
+        deliveryConfidence: order.deliveryConfidence,
+        stockMutationApplied: canMutateProductStock
       }
     }).catch((error) => {
       console.error("Failed to write order-created audit log", error);
@@ -1419,11 +1478,17 @@
 
     const safeLimit = Math.max(0, Number(options?.limitCount) || 0);
     let snapshot = null;
+    const skipIndexedQuery = safeLimit > 0 && hasCachedOrdersCreatedAtIndexMiss();
 
     try {
-      if (safeLimit > 0) {
+      if (safeLimit > 0 && !skipIndexedQuery) {
         snapshot = await db.collectionGroup("orders")
           .orderBy("createdAt", "desc")
+          .limit(safeLimit)
+          .get();
+        clearOrdersCreatedAtIndexMissingFlag();
+      } else if (safeLimit > 0) {
+        snapshot = await db.collectionGroup("orders")
           .limit(safeLimit)
           .get();
       } else {
@@ -1431,8 +1496,10 @@
       }
     } catch (error) {
       // Fallback path for projects that do not have the needed index yet.
-      if (safeLimit > 0) {
-        console.warn("Limited listAllOrders query failed; falling back to limited unordered query.", error);
+      if (safeLimit > 0 && isOrdersCreatedAtIndexError(error)) {
+        markOrdersCreatedAtIndexMissing();
+        snapshot = await db.collectionGroup("orders").limit(safeLimit).get();
+      } else if (safeLimit > 0) {
         snapshot = await db.collectionGroup("orders").limit(safeLimit).get();
       } else {
         throw error;
@@ -1453,12 +1520,18 @@
     const safeLimit = Math.max(0, Number(options?.limitCount) || 0);
     let unsubscribe = () => {};
     let fellBackToUnbounded = false;
+    const skipIndexedQuery = safeLimit > 0 && hasCachedOrdersCreatedAtIndexMiss();
 
     const pushOrders = (snapshot) => {
       const orders = snapshot.docs
         .map(mapOrder)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       onData(orders);
+    };
+
+    const pushOrdersFromIndexedQuery = (snapshot) => {
+      clearOrdersCreatedAtIndexMissingFlag();
+      pushOrders(snapshot);
     };
 
     const reportError = (error) => {
@@ -1479,17 +1552,25 @@
     };
 
     if (safeLimit > 0) {
+      if (skipIndexedQuery) {
+        startLimitedFallbackStream();
+        return () => {
+          try {
+            unsubscribe();
+          } catch {}
+        };
+      }
+
       unsubscribe = db.collectionGroup("orders")
         .orderBy("createdAt", "desc")
         .limit(safeLimit)
         .onSnapshot(
-          pushOrders,
+          pushOrdersFromIndexedQuery,
           (error) => {
-            const code = String(error?.code || "");
-            const shouldFallback = !fellBackToUnbounded && (code === "failed-precondition" || code === "invalid-argument");
+            const shouldFallback = !fellBackToUnbounded && isOrdersCreatedAtIndexError(error);
             if (shouldFallback) {
               fellBackToUnbounded = true;
-              console.warn("Limited watchAllOrders query failed; falling back to limited unordered stream.", error);
+              markOrdersCreatedAtIndexMissing();
               try {
                 unsubscribe();
               } catch {}
@@ -1518,17 +1599,37 @@
 
     const days = Math.max(1, Number(options?.days) || 30);
     const startAt = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const startAtMs = startAt.getTime();
+    const returnsPromise = db.collection("return_requests")
+      .where("createdAt", ">=", startAt)
+      .get();
+    const skipIndexedOrdersQuery = hasCachedOrdersCreatedAtIndexMiss();
+    let ordersSnapshot = null;
 
-    const [ordersSnapshot, returnsSnapshot] = await Promise.all([
-      db.collectionGroup("orders")
-        .where("createdAt", ">=", startAt)
-        .get(),
-      db.collection("return_requests")
-        .where("createdAt", ">=", startAt)
-        .get()
-    ]);
+    if (skipIndexedOrdersQuery) {
+      ordersSnapshot = await db.collectionGroup("orders").get();
+    } else {
+      try {
+        ordersSnapshot = await db.collectionGroup("orders")
+          .where("createdAt", ">=", startAt)
+          .get();
+        clearOrdersCreatedAtIndexMissingFlag();
+      } catch (error) {
+        if (!isOrdersCreatedAtIndexError(error)) {
+          throw error;
+        }
+        markOrdersCreatedAtIndexMissing();
+        ordersSnapshot = await db.collectionGroup("orders").get();
+      }
+    }
 
-    const orders = ordersSnapshot.docs.map(mapOrder);
+    const returnsSnapshot = await returnsPromise;
+    const orders = ordersSnapshot.docs
+      .map(mapOrder)
+      .filter((order) => {
+        const createdAtMs = new Date(order.createdAt || order.updatedAt || 0).getTime();
+        return Number.isFinite(createdAtMs) && createdAtMs >= startAtMs;
+      });
     const returns = returnsSnapshot.docs.map(mapReturnRequest);
     const deliveredOrders = orders.filter((order) => order.status === "delivered");
     const canceledOrders = orders.filter((order) => order.status === "canceled");
@@ -1719,6 +1820,25 @@
       return;
     }
 
+    const actorUidHint = sanitizeString(meta?.actorUid, "");
+    const actorRoleHint = sanitizeString(meta?.actorRole, "").toLowerCase();
+    const authInstance = typeof window.firebase?.auth === "function"
+      ? window.firebase.auth()
+      : null;
+    const actorFromAuth = authInstance?.currentUser || window.firebaseAuth?.currentUser || null;
+    const actorUid = actorUidHint || sanitizeString(actorFromAuth?.uid, "");
+    let actorRole = actorRoleHint;
+
+    if (actorUid && !actorRole) {
+      try {
+        const profile = await getUserProfile(actorUid);
+        actorRole = sanitizeString(profile?.role, "").toLowerCase();
+      } catch (error) {
+        console.warn("updateOrderStatus: failed to resolve actor role; continuing without product stock mutation", error);
+      }
+    }
+
+    const canMutateProductStock = Boolean(meta?.forceStockMutation) || actorRole === "admin";
     const safeStatus = sanitizeMethod(status, "pending");
     const orderRef = db.collection("users").doc(uid).collection("orders").doc(orderId);
     let previousStatusValue = "pending";
@@ -1757,7 +1877,7 @@
       const productId = normalizeProductId(order.productId);
       const productRef = productId ? db.collection("products").doc(String(productId)) : null;
 
-      if (productRef) {
+      if (productRef && canMutateProductStock) {
         const productSnap = await transaction.get(productRef);
         if (productSnap.exists) {
           const product = productSnap.data() || {};
@@ -1866,7 +1986,8 @@
       source: meta?.source || "status_update",
       message: sanitizeString(meta?.note, `Order status changed to ${safeStatus}`),
       meta: {
-        courierNote: sanitizeString(meta?.courierNote, "")
+        courierNote: sanitizeString(meta?.courierNote, ""),
+        stockMutationApplied: canMutateProductStock
       }
     }).catch((error) => {
       console.error("Failed to write order audit log", error);

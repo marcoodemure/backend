@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Admin Panel</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20260302f">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -28,135 +28,191 @@
   </div>
 
   <div id="adminContent" class="admin-content hidden">
-    <section class="admin-card">
-      <div class="admin-card-head">
-        <h2>Notification Center</h2>
-        <div class="admin-filter-wrap">
-          <span id="adminUnreadBadge" class="admin-badge">0 unread</span>
-          <button id="markAllAdminNotificationsBtn" type="button">Mark all read</button>
+    <div id="adminTabs" class="admin-tabs" role="tablist" aria-label="Admin panel sections">
+      <button type="button" class="admin-tab-btn active" data-admin-tab-target="overview" aria-selected="true">Overview</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab-target="products" aria-selected="false">Products</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab-target="orders" aria-selected="false">Orders</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab-target="returns" aria-selected="false">Returns</button>
+    </div>
+
+    <div class="admin-tab-panel active" data-admin-tab-panel="overview">
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2>Notification Center</h2>
+          <div class="admin-filter-wrap">
+            <span id="adminUnreadBadge" class="admin-badge">0 unread</span>
+            <button id="markAllAdminNotificationsBtn" type="button">Mark all read</button>
+          </div>
         </div>
-      </div>
-      <div id="adminNotificationsList" class="admin-list"></div>
-    </section>
+        <div id="adminNotificationsList" class="admin-list"></div>
+      </section>
 
-    <section class="admin-card">
-      <div class="admin-card-head">
-        <h2>Dashboard Metrics</h2>
-        <span class="admin-badge">Live</span>
-      </div>
-      <div id="adminMetrics" class="admin-metrics"></div>
-    </section>
-
-    <section class="admin-card">
-      <div class="admin-card-head">
-        <h2>Products</h2>
-        <span class="admin-badge">Realtime</span>
-      </div>
-
-      <form id="productForm" class="admin-form" autocomplete="off">
-        <input id="productIdInput" type="number" min="1" placeholder="Product ID" required>
-        <input id="productNameInput" type="text" placeholder="Name" required>
-        <input id="productSizeInput" type="text" placeholder="Size" required>
-        <input id="productPriceInput" type="number" min="0" step="0.01" placeholder="Price" required>
-        <input id="productImageInput" type="text" placeholder="Image URL or file name" required>
-        <input id="productStockInput" type="number" min="0" step="1" placeholder="Stock" required>
-        <input id="productCategoryInput" type="text" placeholder="Category (e.g. Apparel)">
-        <input id="productTagsInput" type="text" placeholder="Tags (comma separated)">
-
-        <div class="admin-form-actions">
-          <button id="saveProductBtn" type="submit">Save Product</button>
-          <button id="clearProductBtn" type="button">Clear</button>
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2>Dashboard Metrics</h2>
+          <span class="admin-badge">Live</span>
         </div>
-      </form>
-      <p id="productFormStatus" class="admin-form-status hidden"></p>
+        <div id="adminMetrics" class="admin-metrics"></div>
+      </section>
 
-      <div class="admin-tools-row">
-        <input id="adminProductSearch" type="text" placeholder="Search product by name, id, or size">
-        <select id="adminStockFilter">
-          <option value="all">All stock</option>
-          <option value="low">Low stock</option>
-          <option value="out">Out of stock</option>
-        </select>
-      </div>
-      <div class="admin-tools-row">
-        <select id="adminCategoryFilter">
-          <option value="all">All categories</option>
-        </select>
-        <input id="adminTagFilter" type="text" placeholder="Filter by tag">
-      </div>
-      <div class="admin-tools-row">
-        <input id="adminMinPriceFilter" type="number" min="0" step="1" placeholder="Min price">
-        <input id="adminMaxPriceFilter" type="number" min="0" step="1" placeholder="Max price">
-      </div>
-      <div class="admin-tools-row">
-        <input id="adminLowStockThresholdInput" type="number" min="1" step="1" placeholder="Low-stock threshold">
-        <button id="saveLowStockThresholdBtn" type="button">Save threshold</button>
-      </div>
-      <div id="adminTagChips" class="tag-chip-wrap"></div>
-
-      <div class="admin-backup-row">
-        <button id="exportProductsJsonBtn" type="button">Export Products JSON</button>
-        <label class="file-import-btn" for="importProductsJsonInput">Import Products JSON</label>
-        <input id="importProductsJsonInput" type="file" accept=".json,application/json" class="hidden">
-      </div>
-
-      <div id="productLinkResult" class="admin-link-result hidden">
-        <label for="productLinkInput">Generated checkout URL</label>
-        <div class="admin-link-row">
-          <input id="productLinkInput" type="text" readonly>
-          <button id="copyProductLinkBtn" type="button">Copy</button>
-          <a id="openProductLinkBtn" href="#" target="_blank" rel="noopener noreferrer">Open</a>
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2>Audit Log</h2>
+          <span class="admin-badge">Status Changes</span>
         </div>
-      </div>
+        <div id="adminAuditLog" class="admin-list"></div>
+      </section>
 
-      <div id="adminProductsList" class="admin-list"></div>
-    </section>
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2>Analytics</h2>
+          <button id="exportDailySalesCsvBtn" type="button">Export Daily Sales CSV</button>
+        </div>
+        <div id="adminTopProducts" class="admin-list"></div>
+        <div id="adminConversionFunnel" class="admin-list"></div>
+        <div id="adminDailySalesChart" class="admin-list"></div>
+      </section>
+    </div>
 
-    <section class="admin-card">
-      <div class="admin-card-head">
-        <h2>Orders</h2>
-        <div class="admin-filter-wrap">
-          <label for="adminStatusFilter">Filter</label>
+    <div class="admin-tab-panel" data-admin-tab-panel="products">
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2>Products</h2>
+          <span class="admin-badge">Realtime</span>
+        </div>
+
+        <form id="productForm" class="admin-form" autocomplete="off">
+          <input id="productIdInput" type="number" min="1" placeholder="Product ID" required>
+          <input id="productNameInput" type="text" placeholder="Name" required>
+          <input id="productSizeInput" type="text" placeholder="Size" required>
+          <input id="productPriceInput" type="number" min="0" step="0.01" placeholder="Price" required>
+          <input id="productImageInput" type="text" placeholder="Image URL or file name" required>
+          <input id="productStockInput" type="number" min="0" step="1" placeholder="Stock" required>
+          <input id="productCategoryInput" type="text" placeholder="Category (e.g. Apparel)">
+          <input id="productTagsInput" type="text" placeholder="Tags (comma separated)">
+
+          <div class="admin-form-actions">
+            <button id="saveProductBtn" type="submit">Save Product</button>
+            <button id="clearProductBtn" type="button">Clear</button>
+          </div>
+        </form>
+        <p id="productFormStatus" class="admin-form-status hidden"></p>
+
+        <div class="admin-subsection">
+          <div class="admin-subsection-head">
+            <h3>Quick Product Actions</h3>
+            <p>Filter products, copy checkout links, and remove items fast.</p>
+          </div>
+          <div class="admin-tools-row">
+            <input id="adminProductSearch" type="text" placeholder="Search product by name, id, or size">
+            <select id="adminStockFilter">
+              <option value="all">All stock</option>
+              <option value="low">Low stock</option>
+              <option value="out">Out of stock</option>
+            </select>
+          </div>
+          <div class="admin-tools-row">
+            <select id="adminCategoryFilter">
+              <option value="all">All categories</option>
+            </select>
+            <input id="adminTagFilter" type="text" placeholder="Filter by tag">
+          </div>
+          <div class="admin-tools-row">
+            <input id="adminMinPriceFilter" type="number" min="0" step="1" placeholder="Min price">
+            <input id="adminMaxPriceFilter" type="number" min="0" step="1" placeholder="Max price">
+          </div>
+          <div class="admin-tools-row">
+            <input id="adminLowStockThresholdInput" type="number" min="1" step="1" placeholder="Low-stock threshold">
+            <button id="saveLowStockThresholdBtn" type="button">Save threshold</button>
+          </div>
+          <div id="adminTagChips" class="admin-product-grid admin-available-grid"></div>
+        </div>
+
+        <div class="admin-backup-row">
+          <button id="exportProductsJsonBtn" type="button">Export Products JSON</button>
+          <label class="file-import-btn" for="importProductsJsonInput">Import Products JSON</label>
+          <input id="importProductsJsonInput" type="file" accept=".json,application/json" class="hidden">
+        </div>
+
+        <div id="productLinkResult" class="admin-link-result hidden">
+          <label for="productLinkInput">Generated checkout URL</label>
+          <div class="admin-link-row">
+            <input id="productLinkInput" type="text" readonly>
+            <button id="copyProductLinkBtn" type="button">Copy</button>
+            <a id="openProductLinkBtn" href="#" target="_blank" rel="noopener noreferrer">Open</a>
+          </div>
+        </div>
+
+        <div class="admin-subsection">
+          <div class="admin-subsection-head">
+            <h3>Inventory Manager</h3>
+            <p>Edit product details and monitor stock state.</p>
+          </div>
+          <div id="adminProductsList" class="admin-order-grid admin-product-grid"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="admin-tab-panel" data-admin-tab-panel="orders">
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2>Orders</h2>
+          <span class="admin-badge">Compact cards</span>
+        </div>
+
+        <form id="adminOrderForm" class="admin-form admin-order-form" autocomplete="off">
+          <input id="adminOrderUidInput" type="text" placeholder="Customer UID (optional: uses your UID)">
+          <input id="adminOrderEmailInput" type="email" placeholder="Customer email">
+          <input id="adminOrderProductIdInput" type="number" min="1" step="1" placeholder="Product ID" required>
+          <input id="adminOrderQuantityInput" type="number" min="1" step="1" value="1" placeholder="Quantity" required>
+          <input id="adminOrderShippingFeeInput" type="number" min="0" step="0.01" value="0" placeholder="Shipping fee">
+          <input id="adminOrderContactEmailInput" type="email" placeholder="Contact email (optional)">
+          <select id="adminOrderShippingOptionInput">
+            <option value="standard_shipping">Standard shipping</option>
+            <option value="express_shipping">Express shipping</option>
+          </select>
+          <select id="adminOrderPaymentMethodInput">
+            <option value="cash_on_delivery">Cash on Delivery</option>
+            <option value="online_payment">Online payment</option>
+          </select>
+          <select id="adminOrderDeliveryMethodInput">
+            <option value="ship">Ship to address</option>
+            <option value="pickup">Store pickup</option>
+          </select>
+          <input id="adminOrderNotesInput" type="text" placeholder="Order notes">
+          <div class="admin-form-actions">
+            <button id="adminSaveOrderBtn" type="submit">Add Order</button>
+            <button id="adminClearOrderBtn" type="button">Clear</button>
+          </div>
+        </form>
+        <p id="adminOrderFormStatus" class="admin-form-status hidden"></p>
+
+        <div class="admin-tools-row">
+          <input id="adminOrderSearch" type="text" placeholder="Search order by id, uid, email, product, or notes">
           <select id="adminStatusFilter">
-            <option value="all">All</option>
+            <option value="all">All statuses</option>
             <option value="pending">Pending</option>
-            <option value="in_transit">In Transit</option>
+            <option value="in_transit">In transit</option>
             <option value="delivered">Delivered</option>
             <option value="canceled">Canceled</option>
           </select>
           <button id="exportOrdersCsvBtn" type="button">Export CSV</button>
         </div>
-      </div>
 
-      <div id="adminOrdersList" class="admin-list"></div>
-      <div id="adminOrdersPagination" class="list-pagination"></div>
-    </section>
+        <div id="adminOrdersList" class="admin-order-grid"></div>
+        <div id="adminOrdersPagination" class="list-pagination"></div>
+      </section>
+    </div>
 
-    <section class="admin-card">
-      <div class="admin-card-head">
-        <h2>Audit Log</h2>
-        <span class="admin-badge">Status Changes</span>
-      </div>
-      <div id="adminAuditLog" class="admin-list"></div>
-    </section>
-
-    <section class="admin-card">
-      <div class="admin-card-head">
-        <h2>Analytics</h2>
-        <button id="exportDailySalesCsvBtn" type="button">Export Daily Sales CSV</button>
-      </div>
-      <div id="adminTopProducts" class="admin-list"></div>
-      <div id="adminConversionFunnel" class="admin-list"></div>
-      <div id="adminDailySalesChart" class="admin-list"></div>
-    </section>
-
-    <section class="admin-card">
-      <div class="admin-card-head">
-        <h2>Return Requests</h2>
-        <span class="admin-badge">Mock Flow</span>
-      </div>
-      <div id="adminReturnRequests" class="admin-list"></div>
-    </section>
+    <div class="admin-tab-panel" data-admin-tab-panel="returns">
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2>Return Requests</h2>
+          <span class="admin-badge">Mock Flow</span>
+        </div>
+        <div id="adminReturnRequests" class="admin-list"></div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -173,10 +229,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
-<script src="auth-service.js"></script>
-<script src="firebase-auth-helpers.js"></script>
-<script src="firebase-db.js"></script>
-<script src="admin.js"></script>
+<script src="firebase-config.js?v=20260302c"></script>
+<script src="auth-service.js?v=20260302c"></script>
+<script src="firebase-auth-helpers.js?v=20260302c"></script>
+<script src="firebase-db.js?v=20260302e"></script>
+<script src="admin.js?v=20260302e"></script>
 </body>
 </html>

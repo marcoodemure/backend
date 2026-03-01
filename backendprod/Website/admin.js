@@ -40,6 +40,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   const adminOrdersList = document.getElementById("adminOrdersList");
   const adminOrdersPagination = document.getElementById("adminOrdersPagination");
   const adminStatusFilter = document.getElementById("adminStatusFilter");
+  const adminOrderSearch = document.getElementById("adminOrderSearch");
+  const adminOrderForm = document.getElementById("adminOrderForm");
+  const adminOrderUidInput = document.getElementById("adminOrderUidInput");
+  const adminOrderEmailInput = document.getElementById("adminOrderEmailInput");
+  const adminOrderProductIdInput = document.getElementById("adminOrderProductIdInput");
+  const adminOrderQuantityInput = document.getElementById("adminOrderQuantityInput");
+  const adminOrderShippingFeeInput = document.getElementById("adminOrderShippingFeeInput");
+  const adminOrderContactEmailInput = document.getElementById("adminOrderContactEmailInput");
+  const adminOrderShippingOptionInput = document.getElementById("adminOrderShippingOptionInput");
+  const adminOrderPaymentMethodInput = document.getElementById("adminOrderPaymentMethodInput");
+  const adminOrderDeliveryMethodInput = document.getElementById("adminOrderDeliveryMethodInput");
+  const adminOrderNotesInput = document.getElementById("adminOrderNotesInput");
+  const adminSaveOrderBtn = document.getElementById("adminSaveOrderBtn");
+  const adminClearOrderBtn = document.getElementById("adminClearOrderBtn");
+  const adminOrderFormStatus = document.getElementById("adminOrderFormStatus");
   const adminProductSearch = document.getElementById("adminProductSearch");
   const adminStockFilter = document.getElementById("adminStockFilter");
   const adminCategoryFilter = document.getElementById("adminCategoryFilter");
@@ -61,10 +76,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const returnRequestModal = document.getElementById("returnRequestModal");
   const returnModalBody = document.getElementById("returnModalBody");
   const returnModalCloseBtn = document.getElementById("returnModalCloseBtn");
+  const adminTabs = document.getElementById("adminTabs");
+  const adminTabButtons = Array.from(document.querySelectorAll("[data-admin-tab-target]"));
+  const adminTabPanels = Array.from(document.querySelectorAll("[data-admin-tab-panel]"));
 
   // Defensive guard: never allow native form submit to reload this page.
   if (productForm) {
     productForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+    }, true);
+  }
+  if (adminOrderForm) {
+    adminOrderForm.addEventListener("submit", (event) => {
       event.preventDefault();
     }, true);
   }
@@ -129,7 +152,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const ORDERS_PAGE_SIZE = 8;
   const INITIAL_ORDERS_LIMIT = 80;
   const ANALYTICS_MIN_REFRESH_MS = 15000;
-  const ORDERS_ENABLED = false;
+  const ORDERS_ENABLED = true;
   const ROLE_CACHE_KEY = "adminRoleCacheV1";
   const ROLE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -143,11 +166,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   let stopReturns = null;
   let stopNotifications = null;
   let listenersStarted = false;
-  let activeTagChip = "";
   let allReturnRequests = [];
   let allNotifications = [];
   let backendAnalyticsSummary = null;
   let savingProduct = false;
+  let savingOrder = false;
   let currentUserRole = "";
   let deferredListenersTimer = null;
   let analyticsRefreshTimer = null;
@@ -216,14 +239,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     return Array.from(new Set(source.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean)));
   }
 
+  function parseOptionalNumberInput(inputEl) {
+    const raw = String(inputEl?.value ?? "").trim();
+    if (!raw) return NaN;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
   function getFilteredProducts(products) {
     const searchValue = adminProductSearch?.value?.trim() || "";
     const stockFilter = adminStockFilter?.value || "all";
     const categoryFilter = adminCategoryFilter?.value || "all";
     const tagValue = (adminTagFilter?.value || "").trim().toLowerCase();
-    const minPrice = Number(adminMinPriceFilter?.value);
-    const maxPrice = Number(adminMaxPriceFilter?.value);
-    const chip = activeTagChip.toLowerCase();
+    const minPrice = parseOptionalNumberInput(adminMinPriceFilter);
+    const maxPrice = parseOptionalNumberInput(adminMaxPriceFilter);
 
     return products.filter((product) => {
       if (!matchesProductSearch(product, searchValue)) return false;
@@ -238,7 +267,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (categoryFilter !== "all" && category !== categoryFilter) return false;
       if (tagValue && !tags.some((tag) => tag.includes(tagValue))) return false;
-      if (chip && !tags.includes(chip)) return false;
       if (Number.isFinite(minPrice) && price < minPrice) return false;
       if (Number.isFinite(maxPrice) && price > maxPrice) return false;
       return true;
@@ -260,26 +288,81 @@ document.addEventListener("DOMContentLoaded", async () => {
       adminCategoryFilter.value = categories.map((item) => item.toLowerCase()).includes(selected) ? selected : "all";
     }
 
-    if (adminTagChips) {
-      const tags = Array.from(new Set(products.flatMap((item) => Array.isArray(item.tags) ? item.tags : [])))
-        .map((tag) => String(tag).trim().toLowerCase())
-        .filter(Boolean)
-        .slice(0, 40);
+  }
 
-      adminTagChips.innerHTML = "";
-      tags.forEach((tag) => {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = `tag-chip${activeTagChip === tag ? " active" : ""}`;
-        chip.textContent = tag;
-        chip.addEventListener("click", () => {
-          activeTagChip = activeTagChip === tag ? "" : tag;
-          renderProductFilterControls(allProducts);
-          renderProducts(allProducts);
-        });
-        adminTagChips.appendChild(chip);
-      });
+  function renderAvailableProductsCards(products) {
+    if (!adminTagChips) return;
+    const safeProducts = Array.isArray(products) ? products : [];
+
+    if (!safeProducts.length) {
+      adminTagChips.innerHTML = `
+        <div class="admin-empty-state">
+          <p>No products available for current filters.</p>
+          <button type="button" id="clearAvailableProductsFiltersBtn" class="admin-inline-action">Reset filters</button>
+        </div>
+      `;
+      const resetBtn = document.getElementById("clearAvailableProductsFiltersBtn");
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => resetProductFilters());
+      }
+      return;
     }
+
+    adminTagChips.innerHTML = "";
+    safeProducts
+      .slice()
+      .sort((a, b) => Number(a.id || 0) - Number(b.id || 0))
+      .forEach((product) => {
+        const thumbUrl = normalizeImageUrl(product.image);
+        const link = buildProductUrl(product.id);
+        const stockState = getStockState(product.stock);
+        const card = document.createElement("div");
+        card.className = "admin-product-card";
+        card.innerHTML = `
+          <div class="admin-order-thumb-wrap admin-product-thumb-wrap">
+            ${renderThumbMarkup(thumbUrl, product.name || "", "admin-product-thumb")}
+          </div>
+          <div class="admin-order-content admin-product-content">
+            <div class="admin-order-top admin-product-top">
+              <strong>${escapeHtml(product.name || `Product #${product.id}`)}</strong>
+              <span class="admin-product-id">#${escapeHtml(String(product.id || ""))}</span>
+            </div>
+            <div class="admin-order-meta admin-product-meta">
+              <span>${escapeHtml(formatMoney(product.price))}</span>
+              <span>Stock: ${escapeHtml(String(product.stock ?? "N/A"))}</span>
+            </div>
+            <span class="stock-pill ${stockState.className}">${escapeHtml(stockState.label)}</span>
+            <div class="admin-order-actions admin-product-actions">
+              <button type="button" class="quickCopyProductLinkBtn">Copy product link</button>
+              <button type="button" class="quickDeleteProductBtn danger">Remove product</button>
+              <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open checkout</a>
+            </div>
+          </div>
+        `;
+
+        const copyBtn = card.querySelector(".quickCopyProductLinkBtn");
+        if (copyBtn) {
+          copyBtn.addEventListener("click", async () => {
+            await copyText(link, `Product link copied for #${product.id}.`);
+          });
+        }
+        const removeBtn = card.querySelector(".quickDeleteProductBtn");
+        if (removeBtn) {
+          removeBtn.addEventListener("click", async () => {
+            const confirmed = window.confirm(`Remove product #${product.id}?`);
+            if (!confirmed) return;
+            try {
+              await appDb.deleteProduct(product.id);
+              showToast(`Removed product #${product.id}.`, "success");
+            } catch (error) {
+              console.error("Failed to remove product", error);
+              showToast("Failed to remove product.", "error");
+            }
+          });
+        }
+
+        adminTagChips.appendChild(card);
+      });
   }
 
   function getEstimatedDelivery(order) {
@@ -324,6 +407,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     productFormStatus.classList.add(`is-${type || "info"}`);
   }
 
+  function setOrderFormStatus(message, type) {
+    if (!adminOrderFormStatus) return;
+    adminOrderFormStatus.classList.remove("hidden", "is-success", "is-error", "is-info");
+    if (!message) {
+      adminOrderFormStatus.textContent = "";
+      adminOrderFormStatus.classList.add("hidden");
+      return;
+    }
+    adminOrderFormStatus.textContent = message;
+    adminOrderFormStatus.classList.add(`is-${type || "info"}`);
+  }
+
+  function switchAdminTab(tabName) {
+    const safeTab = String(tabName || "overview");
+    adminTabButtons.forEach((button) => {
+      const active = button.dataset.adminTabTarget === safeTab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    adminTabPanels.forEach((panel) => {
+      const active = panel.dataset.adminTabPanel === safeTab;
+      panel.classList.toggle("active", active);
+    });
+  }
+
   function withTimeout(promise, timeoutMs, timeoutCode, timeoutMessage) {
     const safeMs = Math.max(1000, Number(timeoutMs) || 15000);
     return new Promise((resolve, reject) => {
@@ -359,6 +467,49 @@ document.addEventListener("DOMContentLoaded", async () => {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function normalizeImageUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    const lower = raw.toLowerCase();
+    if (lower === "." || lower === "./" || lower === ".." || lower === "../" || lower === "/") {
+      return "";
+    }
+    if (lower.startsWith("javascript:")) {
+      return "";
+    }
+    if (lower.startsWith("data:")) {
+      return lower.startsWith("data:image/") ? raw : "";
+    }
+    if (lower.startsWith("blob:") || lower.startsWith("http://") || lower.startsWith("https://")) {
+      return raw;
+    }
+    if (lower.includes("://") || raw.startsWith("?") || raw.startsWith("#")) {
+      return "";
+    }
+    if (raw.endsWith("/") || raw.endsWith("\\")) {
+      return "";
+    }
+
+    const noQuery = raw.split(/[?#]/)[0] || "";
+    const hasPathSeparator = /[\\/]/.test(noQuery);
+    const hasImageExtension = /\.(avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(noQuery);
+    if (!hasPathSeparator && !hasImageExtension) {
+      return "";
+    }
+
+    return raw;
+  }
+
+  function renderThumbMarkup(imageValue, altText, className) {
+    const safeUrl = normalizeImageUrl(imageValue);
+    const safeClass = escapeHtml(className || "admin-product-thumb");
+    if (!safeUrl) {
+      return `<div class="${safeClass} placeholder">No image</div>`;
+    }
+    return `<img class="${safeClass}" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(altText || "Product image")}">`;
   }
 
   async function copyText(value, successText) {
@@ -486,6 +637,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  function resetOrderForm() {
+    if (!adminOrderForm) return;
+    adminOrderForm.reset();
+    if (adminOrderQuantityInput) adminOrderQuantityInput.value = "1";
+    if (adminOrderShippingFeeInput) adminOrderShippingFeeInput.value = "0";
+    if (adminOrderShippingOptionInput) adminOrderShippingOptionInput.value = "standard_shipping";
+    if (adminOrderPaymentMethodInput) adminOrderPaymentMethodInput.value = "cash_on_delivery";
+    if (adminOrderDeliveryMethodInput) adminOrderDeliveryMethodInput.value = "ship";
+  }
+
   function fillProductForm(product) {
     productIdInput.value = product.id;
     productIdInput.readOnly = true;
@@ -546,12 +707,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   }
 
+  function matchesOrderSearch(order, searchValue) {
+    if (!searchValue) return true;
+    const query = searchValue.toLowerCase();
+    const haystack = [
+      order.id,
+      order.uid,
+      order.email,
+      order.contactEmail,
+      order.productId,
+      order.productName,
+      order.productCategory,
+      order.status,
+      order.orderNotes
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(query);
+  }
+
   function getStockState(stockValue) {
     const stock = Number(stockValue);
     if (!Number.isFinite(stock)) return { label: "Stock N/A", className: "stock-na" };
     if (stock <= 0) return { label: "Out of stock", className: "stock-out" };
     if (stock <= lowStockThreshold) return { label: `Low stock (${stock})`, className: "stock-low" };
     return { label: `In stock (${stock})`, className: "stock-ok" };
+  }
+
+  function resetProductFilters() {
+    if (adminProductSearch) adminProductSearch.value = "";
+    if (adminStockFilter) adminStockFilter.value = "all";
+    if (adminCategoryFilter) adminCategoryFilter.value = "all";
+    if (adminTagFilter) adminTagFilter.value = "";
+    if (adminMinPriceFilter) adminMinPriceFilter.value = "";
+    if (adminMaxPriceFilter) adminMaxPriceFilter.value = "";
+    renderProductFilterControls(allProducts);
+    renderProducts(allProducts);
   }
 
   function renderMetrics() {
@@ -616,8 +807,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       backendAnalyticsSummary = await appDb.getAnalyticsSummary({ days: 30 });
     } catch (error) {
       const denied = String(error?.code || "") === "permission-denied";
+      const message = String(error?.message || "").toLowerCase();
+      const missingIndex = message.includes("requires a collection_group")
+        || message.includes("query requires")
+        || message.includes("requires an index");
       if (denied) {
         console.warn("Analytics summary denied by Firestore rules. Admin role/session may be missing.");
+      } else if (missingIndex) {
+        console.warn("Analytics summary index is still building; using fallback metrics.");
       } else {
         console.error("Failed to load backend analytics summary", error);
       }
@@ -922,9 +1119,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     allProducts = products;
     renderProductFilterControls(products);
     const visibleProducts = getFilteredProducts(products);
+    renderAvailableProductsCards(visibleProducts);
 
     if (!visibleProducts.length) {
-      adminProductsList.innerHTML = products.length ? "<p>No products match your search/filter.</p>" : "<p>No products yet.</p>";
+      if (!products.length) {
+        adminProductsList.innerHTML = "<p>No products yet.</p>";
+      } else {
+        adminProductsList.innerHTML = `
+          <div class="admin-empty-state">
+            <p>No products match your search/filter.</p>
+            <button type="button" id="clearProductFiltersInlineBtn" class="admin-inline-action">Reset filters</button>
+          </div>
+        `;
+        const clearFiltersBtn = document.getElementById("clearProductFiltersInlineBtn");
+        if (clearFiltersBtn) {
+          clearFiltersBtn.addEventListener("click", () => resetProductFilters());
+        }
+      }
       renderMetrics();
       renderAnalytics();
       return;
@@ -949,38 +1160,51 @@ document.addEventListener("DOMContentLoaded", async () => {
       const stockState = getStockState(product.stock);
       const tags = Array.isArray(product.tags) && product.tags.length ? product.tags.join(", ") : "No tags";
       const category = product.category || "General";
-      const thumbUrl = product.image || "";
+      const thumbUrl = normalizeImageUrl(product.image);
+      const checkoutLink = buildProductUrl(product.id);
 
       const card = document.createElement("div");
-      card.className = "admin-item product-card";
+      card.className = "admin-product-card";
       card.innerHTML = `
-        <div class="product-thumb-wrap">
-          ${thumbUrl ? `<img class="product-thumb" src="${thumbUrl}" alt="${product.name || ''}">` : `<div class="product-thumb placeholder">No image</div>`}
+        <div class="admin-order-thumb-wrap admin-product-thumb-wrap">
+          ${renderThumbMarkup(thumbUrl, product.name || "", "admin-product-thumb")}
         </div>
-        <div class="admin-item-main product-info">
-          <strong>#${product.id} - ${product.name}</strong>
-          <span>Category: ${category}</span>
-          <span>Size: ${product.size || 'N/A'}</span>
-          <span>Price: ${formatMoney(product.price)}</span>
-          <span>Stock: ${product.stock ?? 'N/A'}</span>
-          <span>Image URL: <a href="${thumbUrl}" target="_blank" rel="noopener noreferrer">${thumbUrl || 'none'}</a></span>
-          <span>Tags: ${tags}</span>
-          <span class="stock-pill ${stockState.className}">${stockState.label}</span>
-        </div>
-        <div class="admin-item-actions">
-          <button class="editBtn" type="button">Edit</button>
-          <button class="deleteBtn" type="button">Archive</button>
+        <div class="admin-order-content admin-product-content">
+          <div class="admin-order-top admin-product-top">
+            <strong>${escapeHtml(product.name || `Product #${product.id}`)}</strong>
+            <span class="admin-product-id">#${escapeHtml(String(product.id))}</span>
+          </div>
+          <div class="admin-order-meta admin-product-meta">
+            <span>${escapeHtml(category)}</span>
+            <span>Size: ${escapeHtml(String(product.size || "N/A"))}</span>
+            <span>${escapeHtml(formatMoney(product.price))}</span>
+            <span>Stock: ${escapeHtml(String(product.stock ?? "N/A"))}</span>
+          </div>
+          <p class="admin-order-sub admin-product-sub">Tags: ${escapeHtml(tags)}</p>
+          <span class="stock-pill ${stockState.className}">${escapeHtml(stockState.label)}</span>
+          <div class="admin-order-actions admin-product-actions">
+            <button class="editBtn" type="button">Edit</button>
+            <button class="copyCheckoutBtn" type="button">Copy product link</button>
+            <button class="deleteBtn danger" type="button">Delete product</button>
+            <a href="${escapeHtml(checkoutLink)}" target="_blank" rel="noopener noreferrer">Open checkout</a>
+          </div>
         </div>
       `;
 
       card.querySelector(".editBtn").addEventListener("click", () => fillProductForm(product));
+      card.querySelector(".copyCheckoutBtn").addEventListener("click", async () => {
+        const link = buildProductUrl(product.id);
+        await copyText(link, `Product link copied for product #${product.id}.`);
+      });
       card.querySelector(".deleteBtn").addEventListener("click", async () => {
+        const confirmed = window.confirm(`Delete product #${product.id}? This will hide it from listings.`);
+        if (!confirmed) return;
         try {
           await appDb.deleteProduct(product.id);
-          showToast(`Archived product #${product.id}.`, "success");
+          showToast(`Deleted product #${product.id}.`, "success");
         } catch (error) {
-          console.error("Failed to archive product", error);
-          showToast("Failed to archive product.", "error");
+          console.error("Failed to delete product", error);
+          showToast("Failed to delete product.", "error");
         }
       });
 
@@ -1012,9 +1236,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function renderOrders(orders) {
-    allOrders = orders;
-    const filter = adminStatusFilter.value || "all";
-    filteredOrders = filter === "all" ? [...allOrders] : allOrders.filter((order) => order.status === filter);
+    allOrders = Array.isArray(orders) ? orders : [];
+    const statusFilter = adminStatusFilter?.value || "all";
+    const searchValue = adminOrderSearch?.value?.trim() || "";
+    filteredOrders = allOrders.filter((order) => {
+      if (statusFilter !== "all" && order.status !== statusFilter) {
+        return false;
+      }
+      return matchesOrderSearch(order, searchValue);
+    });
 
     if (!filteredOrders.length) {
       adminOrdersList.innerHTML = "<p>No matching orders.</p>";
@@ -1036,156 +1266,79 @@ document.addEventListener("DOMContentLoaded", async () => {
     pageOrders.forEach((order) => {
       const createdAt = formatDateTime(order.createdAt);
       const updatedAt = formatDateTime(order.updatedAt);
-      const eta = order.status === "canceled" ? "Canceled" : formatDateTime(getEstimatedDelivery(order));
-      const notes = order.orderNotes ? order.orderNotes : "No notes";
-      const courierNote = order.courierNote ? order.courierNote : "";
-      const pickupDetails = order.pickupDetails && typeof order.pickupDetails === "object" ? order.pickupDetails : null;
-      const pickupSummary = order.deliveryMethod === "pickup" && pickupDetails
-        ? `Pickup: ${pickupDetails.pickupDate || "N/A"} ${pickupDetails.pickupTimeSlot || ""} | Ref ${pickupDetails.reference || "N/A"}`
-        : "";
-      const shippingAddress = order.shippingAddress && typeof order.shippingAddress === "object" ? order.shippingAddress : {};
-      const contactPhone = String(shippingAddress.phone || pickupDetails?.contactPhone || "").trim();
-      const telPhone = contactPhone.replace(/[^\d+]/g, "");
-      const contactName = [
-        String(shippingAddress.firstName || "").trim(),
-        String(shippingAddress.lastName || "").trim()
-      ].filter(Boolean).join(" ") || String(pickupDetails?.contactName || "").trim() || "N/A";
-      const confidenceScore = Number(order.deliveryConfidence?.score || 0);
-      const confidenceLevel = String(order.deliveryConfidence?.level || "low").toUpperCase();
-      const confidenceLabel = `${confidenceLevel} (${confidenceScore}/100)`;
-      const lat = Number(order.shippingLocation?.lat);
-      const lng = Number(order.shippingLocation?.lng);
-      const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
-      const coordinateText = hasCoords ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : "";
-      const googleMapUrl = hasCoords ? `https://maps.google.com/?q=${encodeURIComponent(`${lat},${lng}`)}` : "";
-      const mapSnapshotUrl = order.shippingLocationSnapshot?.embedUrl || order.shippingLocationSnapshot?.imageUrl || "";
-      const mapLinkUrl = order.shippingLocationSnapshot?.mapUrl
-        || (
-          hasCoords
-            ? `https://www.openstreetmap.org/?mlat=${encodeURIComponent(lat)}&mlon=${encodeURIComponent(lng)}#map=18/${encodeURIComponent(lat)}/${encodeURIComponent(lng)}`
-            : ""
-        );
-      const fullAddressLines = order.deliveryMethod === "pickup"
-        ? [
-          "Pickup Point: Notre Dame of Dadiangas University (NDDU)",
-          "Address: 459C+CJ6, Marist Ave, General Santos City, South Cotabato",
-          `Pickup Contact: ${contactName}`,
-          `Pickup Phone: ${contactPhone || "N/A"}`,
-          `Pickup Reference: ${pickupDetails?.reference || "N/A"}`,
-          `Pickup Schedule: ${pickupDetails?.pickupDate || "N/A"} ${pickupDetails?.pickupTimeSlot || ""}`.trim()
-        ]
-        : [
-          `Recipient: ${contactName}`,
-          `Phone: ${contactPhone || "N/A"}`,
-          `Address: ${[
-            shippingAddress.addressLine1,
-            shippingAddress.addressLine2,
-            shippingAddress.city,
-            shippingAddress.province,
-            shippingAddress.postalCode,
-            shippingAddress.country
-          ].filter(Boolean).join(", ") || "N/A"}`,
-          `Coordinates: ${hasCoords ? coordinateText : "N/A"}`,
-          `OSM: ${mapLinkUrl || "N/A"}`
-        ];
-      const fullAddressBlock = fullAddressLines.join("\n");
-      const courierMapHtml = mapLinkUrl
-        ? `
-          <div class="admin-rider-card">
-            <strong>Rider-ready delivery pin</strong>
-            <span>Coordinates: ${coordinateText}</span>
-            <div class="admin-rider-actions">
-              <button type="button" class="copyCoordsBtn">Copy coordinates</button>
-              <a href="${googleMapUrl}" target="_blank" rel="noopener noreferrer" class="admin-courier-map-link">Open Google Maps</a>
-              <a href="${mapLinkUrl}" target="_blank" rel="noopener noreferrer" class="admin-courier-map-link">Open OSM</a>
-            </div>
-          </div>
-          ${mapSnapshotUrl ? `<img src="${mapSnapshotUrl}" alt="Courier map preview" class="admin-courier-map-image" onerror="this.style.display='none'">` : ""}
-        `
-        : "<span>Courier map pin: Not set</span>";
-      const historyHtml = Array.isArray(order.statusHistory) && order.statusHistory.length
-        ? order.statusHistory
-          .slice()
-          .reverse()
-          .slice(0, 5)
-          .map((entry) => `<span>${(entry.status || "pending").replace(/_/g, " ")} @ ${formatDateTime(entry.createdAt)} ${entry.note ? `- ${entry.note}` : ""}</span>`)
-          .join("")
-        : "<span>No status history yet.</span>";
+      const orderTitle = order.productName || `Product #${order.productId || "N/A"}`;
+      const email = order.email || order.contactEmail || "N/A";
+      const statusLabel = String(order.status || "pending").replace(/_/g, " ");
+      const notes = String(order.orderNotes || "No notes");
+      const detailsBlock = [
+        `Order ID: ${order.id || "N/A"}`,
+        `UID: ${order.uid || "N/A"}`,
+        `Product: ${orderTitle}`,
+        `Product ID: ${order.productId || "N/A"}`,
+        `Qty: ${Number(order.quantity || 0)}`,
+        `Total: ${formatMoney(order.totalPrice)}`,
+        `Status: ${statusLabel}`,
+        `Created: ${createdAt}`,
+        `Updated: ${updatedAt}`
+      ].join("\n");
 
       const card = document.createElement("div");
-      card.className = "admin-item";
+      card.className = "admin-order-card";
       card.innerHTML = `
-        <div class="admin-item-main">
-          <strong>Order ${order.id}</strong>
-          <span>${order.email || order.contactEmail || "N/A"}</span>
-          <span>${order.productName || `Product #${order.productId}`} | Qty: ${order.quantity} | Total: ${formatMoney(order.totalPrice)}</span>
-          <span>Placed: ${createdAt}</span>
-          <span>Last Updated: ${updatedAt}</span>
-          <span>ETA: ${eta}</span>
-          <span>Notes: ${notes}</span>
-          ${pickupSummary ? `<span>${pickupSummary}</span>` : ""}
-          <span>Delivery Confidence: ${confidenceLabel}</span>
-          ${courierMapHtml}
-          <div class="status-history">${historyHtml}</div>
+        <div class="admin-order-thumb-wrap">
+          ${renderThumbMarkup(order.productImage, orderTitle, "admin-order-thumb")}
         </div>
-        <div class="admin-item-actions">
-          <select class="statusSelect">
-            <option value="pending" ${order.status === "pending" ? "selected" : ""}>Pending</option>
-            <option value="in_transit" ${order.status === "in_transit" ? "selected" : ""}>In Transit</option>
-            <option value="delivered" ${order.status === "delivered" ? "selected" : ""}>Delivered</option>
-            <option value="canceled" ${order.status === "canceled" ? "selected" : ""}>Canceled</option>
-          </select>
-          <input class="courierNoteInput" type="text" placeholder="Courier note" value="${courierNote.replace(/\"/g, "&quot;")}">
-          ${telPhone ? `<a href="tel:${telPhone}" class="invoice-link">Call customer</a>` : `<button type="button" class="quickActionBtn" disabled>No phone</button>`}
-          <button class="copyPhoneBtn" type="button" ${contactPhone ? "" : "disabled"}>Copy phone</button>
-          <button class="copyAddressBtn" type="button">Copy address block</button>
-          <button class="applyStatusBtn" type="button">Update</button>
-          <a href="${getInvoiceUrl(order)}" class="invoice-link" target="_blank" rel="noopener noreferrer">Invoice</a>
+        <div class="admin-order-content">
+          <div class="admin-order-top">
+            <strong>${escapeHtml(orderTitle)}</strong>
+            <span class="order-status-pill ${escapeHtml(String(order.status || "pending"))}">${escapeHtml(statusLabel)}</span>
+          </div>
+          <div class="admin-order-meta">
+            <span>#${escapeHtml(String(order.id || "N/A"))}</span>
+            <span>Product ID: ${escapeHtml(String(order.productId || "N/A"))}</span>
+            <span>Qty: ${escapeHtml(String(order.quantity || 0))}</span>
+            <span>${escapeHtml(formatMoney(order.totalPrice))}</span>
+          </div>
+          <p class="admin-order-sub">${escapeHtml(email)}</p>
+          <p class="admin-order-sub">${escapeHtml(notes)}</p>
+          <div class="admin-order-actions">
+            <select class="statusSelect">
+              <option value="pending" ${order.status === "pending" ? "selected" : ""}>Pending</option>
+              <option value="in_transit" ${order.status === "in_transit" ? "selected" : ""}>In Transit</option>
+              <option value="delivered" ${order.status === "delivered" ? "selected" : ""}>Delivered</option>
+              <option value="canceled" ${order.status === "canceled" ? "selected" : ""}>Canceled</option>
+            </select>
+            <button class="applyStatusBtn" type="button">Update</button>
+            <button class="copyOrderDetailsBtn" type="button">Copy details</button>
+            <a href="${getInvoiceUrl(order)}" class="invoice-link" target="_blank" rel="noopener noreferrer">Invoice</a>
+          </div>
         </div>
       `;
 
       card.querySelector(".applyStatusBtn").addEventListener("click", async () => {
-        const nextStatus = card.querySelector(".statusSelect").value;
-        const nextCourierNote = card.querySelector(".courierNoteInput")?.value?.trim() || "";
+        const nextStatus = card.querySelector(".statusSelect")?.value || "pending";
         try {
           const actor = getCurrentUser();
           await appDb.updateOrderStatus(order.uid, order.id, nextStatus, {
             actorUid: actor?.uid || "",
             actorEmail: actor?.email || "",
             actorRole: "admin",
-            source: "admin_panel",
-            courierNote: nextCourierNote,
-            note: nextCourierNote
+            source: "admin_panel_compact"
           });
           showToast(`Order ${order.id} updated to ${nextStatus.replace(/_/g, " ")}.`, "success");
         } catch (error) {
           console.error("Failed to update order status", error);
           if (error?.code === "out_of_stock" || error?.message === "out_of_stock") {
-            showToast("Not enough stock to move this order state.", "error");
+            showToast("Not enough stock to update this order.", "error");
           } else {
             showToast("Failed to update order status.", "error");
           }
         }
       });
 
-      const copyCoordsBtn = card.querySelector(".copyCoordsBtn");
-      if (copyCoordsBtn && coordinateText) {
-        copyCoordsBtn.addEventListener("click", () => {
-          copyText(coordinateText, "Coordinates copied.");
-        });
-      }
-      const copyPhoneBtn = card.querySelector(".copyPhoneBtn");
-      if (copyPhoneBtn && contactPhone) {
-        copyPhoneBtn.addEventListener("click", () => {
-          copyText(contactPhone, "Phone copied.");
-        });
-      }
-      const copyAddressBtn = card.querySelector(".copyAddressBtn");
-      if (copyAddressBtn) {
-        copyAddressBtn.addEventListener("click", () => {
-          copyText(fullAddressBlock, "Address block copied.");
-        });
-      }
+      card.querySelector(".copyOrderDetailsBtn").addEventListener("click", () => {
+        copyText(detailsBlock, `Copied order #${order.id} details.`);
+      });
 
       adminOrdersList.appendChild(card);
     });
@@ -1811,8 +1964,137 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  if (adminClearOrderBtn) {
+    adminClearOrderBtn.addEventListener("click", () => {
+      resetOrderForm();
+      setOrderFormStatus("", "info");
+    });
+  }
+
+  if (adminOrderForm) {
+    adminOrderForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (savingOrder) return;
+      if (typeof appDb.createOrder !== "function") {
+        setOrderFormStatus("Order API is unavailable.", "error");
+        showToast("Order API is unavailable.", "error");
+        return;
+      }
+
+      const actor = getCurrentUser();
+      const uid = (adminOrderUidInput?.value || "").trim() || String(actor?.uid || "");
+      const emailInput = (adminOrderEmailInput?.value || "").trim();
+      const contactEmail = (adminOrderContactEmailInput?.value || "").trim();
+      const email = emailInput || contactEmail || String(actor?.email || "");
+      const productId = Number(adminOrderProductIdInput?.value);
+      const quantity = Number(adminOrderQuantityInput?.value);
+      const shippingFee = Math.max(0, Number(adminOrderShippingFeeInput?.value || 0));
+      const orderNotes = (adminOrderNotesInput?.value || "").trim();
+      const shippingOption = adminOrderShippingOptionInput?.value || "standard_shipping";
+      const paymentMethod = adminOrderPaymentMethodInput?.value || "cash_on_delivery";
+      const deliveryMethod = adminOrderDeliveryMethodInput?.value || "ship";
+
+      if (!uid) {
+        setOrderFormStatus("Customer UID is required. You can leave it blank to use your current UID.", "error");
+        showToast("Customer UID is required.", "error");
+        return;
+      }
+      if (!Number.isFinite(productId) || productId <= 0) {
+        setOrderFormStatus("Enter a valid Product ID.", "error");
+        showToast("Enter a valid Product ID.", "error");
+        return;
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        setOrderFormStatus("Enter a valid quantity.", "error");
+        showToast("Enter a valid quantity.", "error");
+        return;
+      }
+      if (!email) {
+        setOrderFormStatus("Customer email is required.", "error");
+        showToast("Customer email is required.", "error");
+        return;
+      }
+
+      savingOrder = true;
+      if (adminSaveOrderBtn) adminSaveOrderBtn.disabled = true;
+      setOrderFormStatus("Creating order...", "info");
+
+      try {
+        const product = await appDb.getProductById(productId);
+        if (!product) {
+          const err = new Error("product_not_found");
+          err.code = "product_not_found";
+          throw err;
+        }
+
+        const draft = {
+          productId,
+          productName: product.name || `Product #${productId}`,
+          productSize: product.size || "N/A",
+          productImage: product.image || "",
+          productCategory: product.category || "General",
+          productTags: Array.isArray(product.tags) ? product.tags : [],
+          quantity,
+          unitPrice: Number(product.price || 0),
+          shippingFee,
+          shippingOption,
+          paymentMethod,
+          deliveryMethod,
+          totalPrice: Number(product.price || 0) * quantity + shippingFee,
+          contactEmail,
+          orderNotes,
+          shippingAddress: {
+            country: "",
+            firstName: email.split("@")[0] || "Customer",
+            lastName: "",
+            company: "",
+            addressLine1: "Manual admin order",
+            addressLine2: "",
+            postalCode: "",
+            city: "",
+            province: "",
+            phone: ""
+          }
+        };
+
+        const created = await withTimeout(
+          appDb.createOrder(uid, email, draft),
+          20000,
+          "create_order_timeout",
+          "Order creation timed out."
+        );
+        resetOrderForm();
+        setOrderFormStatus(`Order created: ${created?.id || "success"}.`, "success");
+        showToast(`Order created: ${created?.id || "success"}.`, "success");
+      } catch (error) {
+        console.error("Failed to create order", error);
+        const message = error?.code === "permission-denied"
+          ? "Permission denied creating order. Check admin role."
+          : error?.code === "product_not_found"
+            ? "Product not found."
+            : error?.code === "out_of_stock"
+              ? "Not enough stock for this order."
+              : error?.code === "create_order_timeout"
+                ? "Order creation timed out. Try again."
+                : (error?.message || "Failed to create order.");
+        setOrderFormStatus(message, "error");
+        showToast(message, "error");
+      } finally {
+        savingOrder = false;
+        if (adminSaveOrderBtn) adminSaveOrderBtn.disabled = false;
+      }
+    });
+  }
+
   if (adminStatusFilter) {
     adminStatusFilter.addEventListener("change", () => {
+      currentOrdersPage = 1;
+      renderOrders(allOrders);
+    });
+  }
+  if (adminOrderSearch) {
+    adminOrderSearch.addEventListener("input", () => {
       currentOrdersPage = 1;
       renderOrders(allOrders);
     });
@@ -1835,6 +2117,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       currentOrdersPage = pageValue;
       renderOrders(allOrders);
     });
+  }
+
+  if (adminTabs && adminTabButtons.length && adminTabPanels.length) {
+    adminTabs.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const button = target.closest("[data-admin-tab-target]");
+      if (!button) return;
+      switchAdminTab(button.dataset.adminTabTarget || "overview");
+    });
+    switchAdminTab("overview");
   }
 
   // initial admin access check using resolved sign-in state

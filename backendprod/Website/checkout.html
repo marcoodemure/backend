@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Checkout</title>
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -230,21 +233,6 @@
       <h2 class="section-title"><span class="title-icon" aria-hidden="true">O</span>Order Summary</h2>
       <p>Review items, quantity, payment, and total before placing your order.</p>
     </div>
-    <div class="catalog-filter-card">
-      <h3>Browse Products</h3>
-      <div class="catalog-filter-row">
-        <select id="checkoutCategoryFilter">
-          <option value="all">All categories</option>
-        </select>
-        <input id="checkoutTagFilter" type="text" placeholder="Filter by tag">
-      </div>
-      <div class="catalog-filter-row">
-        <input id="checkoutMinPriceFilter" type="number" min="0" step="1" placeholder="Min price">
-        <input id="checkoutMaxPriceFilter" type="number" min="0" step="1" placeholder="Max price">
-      </div>
-      <div id="checkoutTagChips" class="tag-chip-wrap"></div>
-      <select id="checkoutProductSelect"></select>
-    </div>
     <div id="cartSummary"></div>
   </div>
 </div>
@@ -279,10 +267,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="firebase-config.js"></script>
-<script src="auth-service.js"></script>
-<script src="firebase-auth-helpers.js"></script>
-<script src="firebase-db.js"></script>
-<script src="checkout.js"></script>
+<script src="firebase-config.js?v=20260302"></script>
+<script src="auth-service.js?v=20260302"></script>
+<script src="firebase-auth-helpers.js?v=20260302"></script>
+<script src="firebase-db.js?v=20260302"></script>
+<script src="checkout.js?v=20260302"></script>
 </body>
 </html>

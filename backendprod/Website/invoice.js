@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     invoiceCard.innerHTML = `
       <div class="invoice-brand">
         <div>
-          <h1>DWAD Store Invoice</h1>
+          <h1>Habit likha Store Invoice</h1>
           <p>Order #${order.id || "N/A"}</p>
         </div>
         <span class="status-chip ${statusClass}">${status}</span>
