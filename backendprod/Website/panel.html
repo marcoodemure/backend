@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard</title>
+<title>Admin Panel</title>
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,23 +13,23 @@
 
 <div class="admin-page" id="adminPage">
   <div class="admin-header">
-    <h1>Admin Sign In</h1>
+    <h1>Admin Dashboard</h1>
+    <div id="adminUserPanel" class="admin-user-panel"></div>
   </div>
 
-  <div class="admin-login-wall">
-    <div class="admin-login-card">
-      <h2>Admin Sign In</h2>
-      <p>Enter credentials to access the dashboard.</p>
-
-      <form id="adminLoginForm" class="admin-login-form" autocomplete="off">
-        <input id="adminEmailInput" type="email" placeholder="Admin email (username)" required>
-        <input id="adminPasswordInput" type="password" placeholder="Password" required>
-        <button id="adminLoginBtn" type="submit">Sign In</button>
-      </form>
-
-      <p id="adminLoginError" class="admin-login-error hidden"></p>
-    </div>
+  <div id="adminUnauthorized" class="admin-alert hidden">
+    <strong>Access denied.</strong> This page is for admin users only.
   </div>
+
+  <div id="adminContent" class="admin-content hidden">
+    <section class="admin-card">
+      <div class="admin-card-head">
+        <h2>Notification Center</h2>
+        <div class="admin-filter-wrap">
+          <span id="adminUnreadBadge" class="admin-badge">0 unread</span>
+          <button id="markAllAdminNotificationsBtn" type="button">Mark all read</button>
+        </div>
+      </div>
       <div id="adminNotificationsList" class="admin-list"></div>
     </section>
 
@@ -169,6 +169,7 @@
 <script src="firebase-config.js"></script>
 <script src="auth-service.js"></script>
 <script src="firebase-auth-helpers.js"></script>
-<script src="admin-login.js"></script>
+<script src="firebase-db.js"></script>
+<script src="admin.js"></script>
 </body>
 </html>

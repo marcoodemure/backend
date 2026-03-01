@@ -69,6 +69,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  // ensure the user is signed in and has admin role when accessing panel
+  const signedIn = auth.getCurrentUser();
+  if (!signedIn || !signedIn.uid) {
+    // not logged in, drop back to login page
+    window.location.href = "admin.html";
+    return;
+  }
+  try {
+    const profile = await appDb.ensureUserDocument(signedIn);
+    if (profile?.role !== "admin") {
+      await auth.signOut();
+      window.location.href = "admin.html";
+      return;
+    }
+  } catch (err) {
+    console.error("Failed to verify admin role", err);
+    // redirect any uncertainty back to login
+    window.location.href = "admin.html";
+    return;
+  }
+
   let lowStockThreshold = Math.max(1, Number(localStorage.getItem("lowStockThreshold")) || 5);
   const ORDERS_PAGE_SIZE = 8;
 
