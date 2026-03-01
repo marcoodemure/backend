@@ -1,4 +1,6 @@
 (function () {
+  // leave as empty string to use the default database; otherwise specify the named
+  // database identifier (e.g. "(default)" or "mySecondaryDb").
   const firestoreDatabaseId = "";
 
   const firebaseConfig = {

@@ -3,7 +3,7 @@
   const userPanel = document.getElementById("userPanel");
   const ordersFeedback = document.getElementById("ordersFeedback");
 
-  const appAuth = window.appAuth;
+  const auth = window.authService;
   const appDb = window.appDb;
 
   if (!ordersList || !userPanel) {
@@ -22,8 +22,10 @@
   }
 
   function getCurrentUser() {
-    if (appAuth) {
-      return appAuth.getCurrentUser();
+    // prefer the new auth service, fallback to localStorage for offline/debug
+    if (auth && typeof auth.getCurrentUser === "function") {
+      const u = auth.getCurrentUser();
+      if (u) return u;
     }
     return readJson("currentUser", null);
   }
@@ -136,17 +138,14 @@
   }
 
   async function syncUserAndProfile() {
-    if (appAuth && appAuth.isConfigured()) {
-      await appAuth.syncCurrentUser();
-    }
-
-    let user = getCurrentUser();
+    let user = auth && typeof auth.getCurrentUser === "function" ? auth.getCurrentUser() : null;
 
     if (user && isRemoteDbReady() && user.uid) {
       try {
         const profile = await appDb.ensureUserDocument(user);
-        if (profile && appAuth?.updateCurrentUser) {
-          user = appAuth.updateCurrentUser({ role: profile.role || "customer" }) || user;
+        // optionally store role in localstorage
+        if (profile && profile.role) {
+          try { localStorage.setItem('userRole', profile.role); } catch (e) {}
         }
       } catch (error) {
         console.error("Failed to sync user profile", error);
@@ -231,8 +230,8 @@
     if (logoutBtn) {
       logoutBtn.addEventListener("click", async () => {
         try {
-          if (appAuth && appAuth.isConfigured()) {
-            await appAuth.signOut();
+          if (auth && auth.isConfigured()) {
+            await auth.signOut();
           } else {
             localStorage.removeItem("currentUser");
           }

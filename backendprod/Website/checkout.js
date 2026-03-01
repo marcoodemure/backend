@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const pinMapPreviewFrame = document.getElementById("pinMapPreviewFrame");
   const pinMapPreviewStatus = document.getElementById("pinMapPreviewStatus");
 
-  const appAuth = window.appAuth;
+  const auth = window.authService;
   const appDb = window.appDb;
 
   function readJson(key, fallback) {
@@ -95,12 +95,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function getCurrentUser() {
-    if (appAuth) {
-      return appAuth.getCurrentUser();
+    if (auth) {
+      return auth.getCurrentUser();
     }
     return readJson("currentUser", null);
   }
 
+  // local user helpers left intact in case existing flows require them
   function getUsers() {
     return readJson("users", []);
   }
@@ -1063,17 +1064,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function syncUserAndProfile() {
-    if (appAuth && appAuth.isConfigured()) {
-      await appAuth.syncCurrentUser();
-    }
-
     let user = getCurrentUser();
 
     if (user && isRemoteDbReady() && user.uid) {
       try {
         const profile = await appDb.ensureUserDocument(user);
-        if (profile && appAuth?.updateCurrentUser) {
-          user = appAuth.updateCurrentUser({ role: profile.role || "customer" }) || user;
+        if (profile && profile.role) {
+          try { localStorage.setItem('userRole', profile.role); } catch (e) {}
         }
       } catch (error) {
         console.error("Failed to sync user profile", error);
@@ -1459,8 +1456,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (logoutBtn) {
       logoutBtn.addEventListener("click", async () => {
         try {
-          if (appAuth && appAuth.isConfigured()) {
-            await appAuth.signOut();
+          if (auth && auth.isConfigured()) {
+            await auth.signOut();
           } else {
             localStorage.removeItem("currentUser");
           }

@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  const appAuth = window.appAuth;
+  const auth = window.authService;
   const appDb = window.appDb;
 
   const userPanel = document.getElementById("profileUserPanel");
@@ -187,13 +187,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     setMapHint("Click map to set your saved address.", "info");
   }
 
-  if (!appAuth || !appDb || !appAuth.isConfigured() || !appDb.isConfigured()) {
+  if (!auth || !appDb || !auth.isConfigured() || !appDb.isConfigured()) {
     setFeedback("error", "Profile services are not configured.");
     return;
   }
 
-  await appAuth.syncCurrentUser();
-  const user = appAuth.getCurrentUser();
+  const user = auth.getCurrentUser();
 
   if (!user?.uid) {
     setFeedback("error", "Please sign in first.");
@@ -215,7 +214,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const logoutBtn = document.getElementById("profileLogoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async () => {
-      await appAuth.signOut();
+      await auth.signOut();
       window.location.href = "signin.html?from=profile";
     });
   }

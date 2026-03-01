@@ -1,6 +1,6 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const appAuth = window.appAuth;
+  const auth = window.authService;
   const appDb = window.appDb;
 
   const adminContent = document.getElementById("adminContent");
@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  if (!appAuth || !appDb || !appAuth.isConfigured() || !appDb.isConfigured()) {
+  if (!auth || !appDb || !auth.isConfigured() || !appDb.isConfigured()) {
     showSetupError("<strong>Setup required.</strong> Firebase config/scripts are missing.");
     return;
   }
@@ -88,7 +88,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let backendAnalyticsSummary = null;
 
   function getCurrentUser() {
-    return appAuth.getCurrentUser();
+    return auth.getCurrentUser();
   }
 
   function formatMoney(value) {
@@ -365,7 +365,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const logoutBtn = document.getElementById("adminLogoutBtn");
     if (logoutBtn) {
       logoutBtn.addEventListener("click", async () => {
-        await appAuth.signOut();
+        await auth.signOut();
         window.location.href = "admin.html";
       });
     }
@@ -1221,7 +1221,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function resolveUserWithRole(user) {
     const profile = await appDb.ensureUserDocument(user);
     if (!profile) return user;
-    return appAuth.updateCurrentUser({ role: profile.role || "customer" }) || user;
+    // optionally store role in localstorage
+    try {
+      localStorage.setItem('userRole', profile.role || 'customer');
+    } catch (e) {}
+    return user;
   }
 
   async function handleAdminAccess(user, loginMessage) {
@@ -1238,14 +1242,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       resolvedUser = await resolveUserWithRole(user);
     } catch (error) {
       console.error("Failed to resolve user role", error);
-      await appAuth.signOut();
+      await auth.signOut();
       await renderUserPanel(null);
       showLoginWall("Failed to verify admin account.");
       return;
     }
 
     if (resolvedUser.role !== "admin") {
-      await appAuth.signOut();
+      await auth.signOut();
       await renderUserPanel(null);
       showLoginWall("This account is not an admin.");
       return;
@@ -1337,7 +1341,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
-      const auth = appAuth.getAuthInstance();
+      // authService used for sign-in
+      // const auth = appAuth.getAuthInstance();
       if (!auth) {
         setLoginError("Authentication is unavailable. Please refresh the page.");
         return;
@@ -1347,14 +1352,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (adminLoginBtn) adminLoginBtn.disabled = true;
 
       try {
-        const signInPromise = auth.signInWithEmailAndPassword(email, password);
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Sign in request timed out. Please check your connection.")), 10000)
-        );
-        await Promise.race([signInPromise, timeoutPromise]);
-
-        await appAuth.syncCurrentUser();
-        await handleAdminAccess(getCurrentUser(), "");
+        const credential = await auth.signIn(email, password);
+        await handleAdminAccess(credential.user || getCurrentUser(), "");
         if (adminPasswordInput) adminPasswordInput.value = "";
       } catch (error) {
         console.error("Admin sign-in failed", error);
@@ -1417,7 +1416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  await appAuth.syncCurrentUser();
+  // initial admin access check using current auth state
   await handleAdminAccess(getCurrentUser(), "");
 
   window.addEventListener("beforeunload", () => stopRealtimeListeners());

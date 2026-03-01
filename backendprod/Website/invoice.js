@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const printInvoiceBtn = document.getElementById("printInvoiceBtn");
   const downloadPdfBtn = document.getElementById("downloadPdfBtn");
 
-  const appAuth = window.appAuth;
+  const auth = window.authService;
   const appDb = window.appDb;
 
   function setFeedback(type, message) {
@@ -117,14 +117,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  if (!appAuth || !appDb || !appAuth.isConfigured() || !appDb.isConfigured()) {
+  if (!auth || !appDb || !auth.isConfigured() || !appDb.isConfigured()) {
     setFeedback("error", "Invoice service is not configured.");
     invoiceCard.innerHTML = "<p>Unable to load invoice.</p>";
     return;
   }
 
-  await appAuth.syncCurrentUser();
-  let user = appAuth.getCurrentUser();
+  let user = auth.getCurrentUser();
 
   if (!user || !user.uid) {
     setFeedback("error", "Sign in first to view invoices.");
@@ -134,8 +133,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   try {
     const profile = await appDb.ensureUserDocument(user);
-    if (profile && appAuth?.updateCurrentUser) {
-      user = appAuth.updateCurrentUser({ role: profile.role || "customer" }) || user;
+    // optionally store role in localstorage
+    if (profile && profile.role) {
+      try { localStorage.setItem('userRole', profile.role); } catch (e) {}
     }
   } catch (error) {
     console.error("Failed to sync invoice user profile", error);

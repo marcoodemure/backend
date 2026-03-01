@@ -3,16 +3,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const passwordInput = document.getElementById("password");
   const createBtn = document.getElementById("createBtn");
   const signinLink = document.getElementById("signinLink");
-  const appAuth = window.appAuth;
   const appDb = window.appDb;
+  const auth = window.authService;
 
   if (!emailInput || !passwordInput || !createBtn) {
     console.error("create-account.js: Missing required elements");
     return;
   }
 
-  if (!appAuth) {
-    console.error("create-account.js: appAuth is not available");
+  if (!auth || !auth.isConfigured()) {
+    console.error("create-account.js: Authentication service not available");
     return;
   }
 
@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function getRedirectUrl() {
     const from = pageParams.get("from");
     const paramProductId = Number(pageParams.get("product_id"));
-    const pendingDraft = appAuth.readJson("pendingOrderDraft", null);
+    const pendingDraft = JSON.parse(localStorage.getItem("pendingOrderDraft")||"null");
 
     if (from === "admin") {
       return "admin.html";
@@ -85,46 +85,29 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if (!appAuth.isConfigured()) {
-      alert("Firebase is not configured yet. Update firebase-config.js first.");
-      return;
-    }
-
-    const auth = appAuth.getAuthInstance();
-    if (!auth) {
-      alert("Authentication service is not available. Please refresh the page.");
+    if (!auth.isConfigured()) {
+      alert("Firebase authentication is not configured yet.");
       return;
     }
 
     createBtn.disabled = true;
 
     try {
-      const createPromise = auth.createUserWithEmailAndPassword(email, password);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("auth/timeout")), 15000)
-      );
-      const credential = await Promise.race([createPromise, timeoutPromise]);
-      
-      const localUser = appAuth.upsertLocalUser(credential.user);
+      const credential = await auth.signUp(email, password);
       if (appDb && appDb.isConfigured()) {
         try {
-          const profile = await appDb.ensureUserDocument(localUser || credential.user);
+          const profile = await appDb.ensureUserDocument(credential.user);
           if (profile) {
-            appAuth.updateCurrentUser({ role: profile.role || "customer" });
+            localStorage.setItem('userRole', profile.role || 'customer');
           }
         } catch (dbError) {
           console.error("Failed to sync user document:", dbError);
-          // Continue anyway - user is authenticated
         }
       }
       window.location.href = getRedirectUrl();
     } catch (error) {
       console.error("Account creation failed:", error);
-      if (error.message === "auth/timeout") {
-        alert("Request timed out. Please check your internet connection and try again.");
-      } else {
-        alert(formatCreateError(error));
-      }
+      alert(error.message || formatCreateError(error));
     } finally {
       createBtn.disabled = false;
     }
