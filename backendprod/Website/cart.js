@@ -101,6 +101,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch {}
   }
 
+  function clearPrimaryLocalCart() {
+    try {
+      localStorage.removeItem("cartProductId");
+      localStorage.removeItem("cartQuantity");
+    } catch {}
+  }
+
+  function syncPrimaryLocalCart(items) {
+    if (Array.isArray(items) && items.length) {
+      setPrimaryLocalCart(items[0]);
+      return;
+    }
+    clearPrimaryLocalCart();
+  }
+
   function saveQueue(items) {
     writeJson(CHECKOUT_QUEUE_KEY, items || []);
   }
@@ -185,8 +200,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function loadCartItems() {
     let items = [];
+    let remoteLoadAttempted = false;
+    let remoteLoadFailed = false;
 
     if (currentUser?.uid && appDb && appDb.isConfigured()) {
+      remoteLoadAttempted = true;
       try {
         if (typeof appDb.listCartItems === "function") {
           items = normalizeCartItems(await appDb.listCartItems(currentUser.uid));
@@ -202,12 +220,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
         }
       } catch (error) {
+        remoteLoadFailed = true;
         console.error("cart.js: failed to load remote cart", error);
         setFeedback("error", "Failed to load cart from database.");
       }
     }
 
-    if (!items.length) {
+    const allowLocalFallback = !remoteLoadAttempted || remoteLoadFailed;
+    if (!items.length && allowLocalFallback) {
       const localProductId = toProductId(localStorage.getItem("cartProductId"));
       if (localProductId) {
         items = normalizeCartItems([{
@@ -222,6 +242,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function refreshCart() {
     cartItems = await loadCartItems();
+    syncPrimaryLocalCart(cartItems);
     const currentIds = new Set(cartItems.map((item) => item.productId));
     selectedProductIds = new Set(Array.from(selectedProductIds).filter((id) => currentIds.has(id)));
     renderCart();
@@ -371,15 +392,31 @@ document.addEventListener("DOMContentLoaded", async () => {
       setFeedback("error", "Cart service is unavailable.");
       return;
     }
+    const safeIds = Array.from(
+      new Set((Array.isArray(productIds) ? productIds : [productIds]).map((id) => toProductId(id)).filter((id) => id > 0))
+    );
+    if (!safeIds.length) {
+      return;
+    }
+
+    const previousItems = cartItems.slice();
+    const removeSet = new Set(safeIds);
+    cartItems = cartItems.filter((item) => !removeSet.has(item.productId));
+    safeIds.forEach((id) => selectedProductIds.delete(id));
+    syncPrimaryLocalCart(cartItems);
+    renderCart();
+
     try {
       if (typeof appDb.removeCartItems === "function") {
-        await appDb.removeCartItems(currentUser.uid, productIds);
+        await appDb.removeCartItems(currentUser.uid, safeIds);
       } else if (typeof appDb.clearCart === "function") {
         await appDb.clearCart(currentUser.uid);
       }
-      productIds.forEach((id) => selectedProductIds.delete(toProductId(id)));
       await refreshCart();
     } catch (error) {
+      cartItems = previousItems;
+      syncPrimaryLocalCart(cartItems);
+      renderCart();
       console.error("cart.js: remove failed", error);
       setFeedback("error", "Failed to remove selected cart items.");
     }
