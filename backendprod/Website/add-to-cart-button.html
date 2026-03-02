@@ -11,6 +11,9 @@
     --btn-ok-bg: #e9f9ef;
     --btn-ok-color: #0f8a3c;
     --btn-ok-border: #16a34a;
+    --btn-err-bg: #fee2e2;
+    --btn-err-color: #b91c1c;
+    --btn-err-border: #ef4444;
     --ok: #0f8a3c;
     --err: #b91c1c;
   }
@@ -52,6 +55,11 @@
     background: var(--btn-ok-bg);
     border-color: var(--btn-ok-border);
     color: var(--btn-ok-color);
+  }
+  #addToCartBtn.is-error {
+    background: var(--btn-err-bg);
+    border-color: var(--btn-err-border);
+    color: var(--btn-err-color);
   }
   #addToCartBtn:disabled {
     opacity: 0.7;
@@ -117,6 +125,29 @@
     if (type === "err") message.classList.add("err");
   }
 
+  function parseHoldMs(value, fallbackMs) {
+    const raw = Number(value);
+    return Number.isFinite(raw)
+      ? Math.max(800, Math.min(10000, Math.floor(raw)))
+      : fallbackMs;
+  }
+
+  function setTimedButtonState(kind, text, previousLabel, holdMs) {
+    if (restoreTimer) {
+      clearTimeout(restoreTimer);
+      restoreTimer = null;
+    }
+    button.classList.remove("is-added", "is-error");
+    if (kind === "ok") button.classList.add("is-added");
+    if (kind === "err") button.classList.add("is-error");
+    button.textContent = text;
+    restoreTimer = setTimeout(() => {
+      button.classList.remove("is-added", "is-error");
+      button.textContent = previousLabel || "Add to cart";
+      restoreTimer = null;
+    }, holdMs);
+  }
+
   function saveLocalCart(productId, quantity) {
     try {
       localStorage.setItem("cartProductId", String(productId));
@@ -165,18 +196,25 @@
     const qty = toQty(params.get("qty"));
     const okText = String(params.get("ok_text") || "Added to cart successfully").trim();
     const okBtnText = String(params.get("ok_btn_text") || "Added").trim();
-    const okHoldMsRaw = Number(params.get("ok_hold_ms"));
-    const okHoldMs = Number.isFinite(okHoldMsRaw)
-      ? Math.max(800, Math.min(10000, Math.floor(okHoldMsRaw)))
-      : 1800;
+    const okHoldMs = parseHoldMs(params.get("ok_hold_ms"), 1800);
     const errText = String(params.get("err_text") || "Failed to add to cart").trim();
+    const errBtnText = String(params.get("err_btn_text") || "Failed").trim();
+    const errHoldMs = parseHoldMs(params.get("err_hold_ms"), 2200);
 
     if (!productId) {
-      setMessage("Missing product_id", "err");
+      if (isCompact) {
+        setTimedButtonState("err", errBtnText, button.textContent, errHoldMs);
+      } else {
+        setMessage("Missing product_id", "err");
+      }
       return;
     }
     if (!appDb || !appDb.isConfigured()) {
-      setMessage("Cart service is unavailable", "err");
+      if (isCompact) {
+        setTimedButtonState("err", errBtnText, button.textContent, errHoldMs);
+      } else {
+        setMessage("Cart service is unavailable", "err");
+      }
       return;
     }
 
@@ -187,7 +225,7 @@
       clearTimeout(restoreTimer);
       restoreTimer = null;
     }
-    button.classList.remove("is-added");
+    button.classList.remove("is-added", "is-error");
     button.textContent = "Adding...";
     setMessage("", "");
 
@@ -223,22 +261,21 @@
 
       saveLocalCart(productId, finalQty);
       deferLabelRestore = true;
-      button.classList.add("is-added");
-      button.textContent = okBtnText;
+      setTimedButtonState("ok", okBtnText, previousLabel, okHoldMs);
       if (!isCompact) {
         setMessage(okText, "ok");
       }
-      restoreTimer = setTimeout(() => {
-        button.classList.remove("is-added");
-        button.textContent = previousLabel;
-        restoreTimer = null;
-      }, okHoldMs);
     } catch (error) {
       console.error("add-to-cart-button: add failed", error);
-      setMessage(errText, "err");
+      if (isCompact) {
+        deferLabelRestore = true;
+        setTimedButtonState("err", errBtnText, previousLabel, errHoldMs);
+      } else {
+        setMessage(errText, "err");
+      }
     } finally {
       if (!deferLabelRestore) {
-        button.classList.remove("is-added");
+        button.classList.remove("is-added", "is-error");
         button.textContent = previousLabel;
       }
       button.disabled = false;
@@ -249,7 +286,11 @@
   button.addEventListener("click", () => {
     handleClick().catch((error) => {
       console.error("add-to-cart-button click failed", error);
-      setMessage("Unexpected error", "err");
+      if (isCompact) {
+        setTimedButtonState("err", "Failed", button.textContent, 2200);
+      } else {
+        setMessage("Unexpected error", "err");
+      }
     });
   });
 })();

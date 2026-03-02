@@ -226,7 +226,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
 
-    const allowLocalFallback = !remoteLoadAttempted || remoteLoadFailed;
+    const allowLocalFallback = !currentUser?.uid && (!remoteLoadAttempted || remoteLoadFailed);
     if (!items.length && allowLocalFallback) {
       const localProductId = toProductId(localStorage.getItem("cartProductId"));
       if (localProductId) {

@@ -1269,6 +1269,21 @@
       product = await getProductById(safeProductId);
     } catch (error) {
       console.error("Failed to resolve product for addCartItem", error);
+      const lookupErr = new Error("product_lookup_failed");
+      lookupErr.code = "product_lookup_failed";
+      throw lookupErr;
+    }
+
+    if (!product || normalizeProductId(product.id) !== safeProductId) {
+      const notFoundErr = new Error("product_not_found");
+      notFoundErr.code = "product_not_found";
+      throw notFoundErr;
+    }
+
+    if (product.isActive === false) {
+      const inactiveErr = new Error("product_inactive");
+      inactiveErr.code = "product_inactive";
+      throw inactiveErr;
     }
 
     const cartRef = db.collection("carts").doc(uid);
@@ -1281,10 +1296,10 @@
       const nextItems = upsertCartItems(currentItems, {
         productId: safeProductId,
         quantity: Number(existing?.quantity || 0) + safeQuantity,
-        productName: product?.name || sanitizeString(options?.productName, existing?.productName || `Product #${safeProductId}`),
-        productSize: product?.size || sanitizeString(options?.productSize, existing?.productSize || ""),
-        productImage: product?.image || sanitizeString(options?.productImage, existing?.productImage || ""),
-        unitPrice: Number(product?.price) || Number(options?.unitPrice) || Number(existing?.unitPrice) || 0,
+        productName: sanitizeString(product.name, existing?.productName || `Product #${safeProductId}`),
+        productSize: sanitizeString(product.size, existing?.productSize || ""),
+        productImage: sanitizeString(product.image, existing?.productImage || ""),
+        unitPrice: Number(product.price) || Number(existing?.unitPrice) || 0,
         updatedAt: new Date().toISOString()
       });
 

@@ -88,17 +88,25 @@
   }
 
   let nextQty = qtyToAdd;
+  let didPersistCart = false;
+  let failureMessage = "";
   if (appDb && appDb.isConfigured() && typeof appDb.addCartItem === "function") {
     try {
       const updatedItem = await appDb.addCartItem(user.uid, productId, qtyToAdd, {
         contactEmail: user.email || ""
       });
+      if (!updatedItem || !updatedItem.productId) {
+        throw new Error("cart_item_not_saved");
+      }
       if (updatedItem?.quantity) {
         nextQty = Math.max(1, Number(updatedItem.quantity) || qtyToAdd);
       }
+      didPersistCart = true;
     } catch (error) {
       console.error("add-to-cart.html: Failed to add cart item", error);
-      statusEl.textContent = "Failed to save cart. Redirecting...";
+      failureMessage = error?.code === "product_not_found"
+        ? "This product is unavailable."
+        : "Failed to save cart. Please try again.";
     }
   } else if (appDb && appDb.isConfigured() && typeof appDb.setCart === "function") {
     try {
@@ -112,10 +120,18 @@
         quantity: nextQty,
         contactEmail: user.email || ""
       });
+      didPersistCart = true;
     } catch (error) {
       console.error("add-to-cart.html: Legacy cart fallback failed", error);
-      statusEl.textContent = "Failed to save cart. Redirecting...";
+      failureMessage = "Failed to save cart. Please try again.";
     }
+  } else {
+    failureMessage = "Cart service is unavailable.";
+  }
+
+  if (!didPersistCart) {
+    statusEl.textContent = failureMessage || "Failed to save cart. Please try again.";
+    return;
   }
 
   saveLocalCart(productId, nextQty);
