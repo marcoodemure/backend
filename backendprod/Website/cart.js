@@ -9,6 +9,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cartCheckoutSelectedBtn = document.getElementById("cartCheckoutSelectedBtn");
   const cartRemoveSelectedBtn = document.getElementById("cartRemoveSelectedBtn");
   const cartList = document.getElementById("cartList");
+  const query = new URLSearchParams(window.location.search);
+  const requireSignInFirst = query.get("signin_first") === "1";
+  const signInRedirectRaw = String(query.get("signin_redirect") || "").trim();
+  const notLoggedInRedirectUrl = /^https?:\/\//i.test(signInRedirectRaw)
+    ? signInRedirectRaw
+    : "https://sites.google.com/view/habitlikha/home/profile";
 
   const CHECKOUT_QUEUE_KEY = "checkoutQueueV1";
 
@@ -118,6 +124,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function saveQueue(items) {
     writeJson(CHECKOUT_QUEUE_KEY, items || []);
+  }
+
+  function redirectToSignInPage() {
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.replace(notLoggedInRedirectUrl);
+        return;
+      }
+    } catch {}
+    window.location.replace(notLoggedInRedirectUrl);
   }
 
   async function resolveCurrentUser() {
@@ -450,6 +466,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   await renderUserPanel(currentUser);
 
   if (!currentUser?.uid) {
+    if (requireSignInFirst) {
+      redirectToSignInPage();
+      return;
+    }
     setFeedback("info", "Please sign in to view your cart.");
     cartList.innerHTML = `<p><a href="login.html?from=cart">Sign in</a> to continue.</p>`;
     return;
