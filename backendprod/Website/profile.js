@@ -200,7 +200,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!user?.uid) {
     setFeedback("error", "Please sign in first.");
     if (userPanel) {
-      userPanel.innerHTML = `<a href="signin.html?from=profile" class="signinBtn">Sign in</a>`;
+      userPanel.innerHTML = `<a href="login.html?from=profile" class="signinBtn">Sign in</a>`;
     }
     return;
   }
@@ -218,7 +218,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async () => {
       await auth.signOut();
-      window.location.href = "signin.html?from=profile";
+      window.location.href = "login.html?from=profile";
     });
   }
 

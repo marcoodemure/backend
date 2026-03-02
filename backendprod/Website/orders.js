@@ -231,7 +231,7 @@
 
     if (!user) {
       userPanel.innerHTML = `
-        <a href="signin.html?from=orders" class="signinBtn">Sign in</a>
+        <a href="login.html?from=orders" class="signinBtn">Sign in</a>
         <a href="${cartUrl}" class="cartBtn">Cart</a>
       `;
       return;
@@ -551,7 +551,21 @@
   await renderUserPanel(user, cartProductId);
 
   if (!user) {
-    ordersList.innerHTML = `<p>Please <a href="signin.html?from=orders">sign in</a> first.</p>`;
+    ordersList.innerHTML = `<p>Please <a href="login.html?from=orders">sign in</a> first.</p>`;
+    if (auth && typeof auth.onAuthStateChanged === "function") {
+      const unsubscribe = auth.onAuthStateChanged((nextUser) => {
+        if (!nextUser?.uid) return;
+        try {
+          unsubscribe();
+        } catch {}
+        window.location.reload();
+      });
+      window.addEventListener("beforeunload", () => {
+        try {
+          unsubscribe();
+        } catch {}
+      }, { once: true });
+    }
     return;
   }
 

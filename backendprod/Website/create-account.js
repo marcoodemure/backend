@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
   const createBtn = document.getElementById("createBtn");
@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (productId) linkParams.set("product_id", productId);
 
     const query = linkParams.toString();
-    signinLink.href = query ? `signin.html?${query}` : "signin.html";
+    signinLink.href = query ? `login.html?${query}` : "login.html";
   }
 
   function getRedirectUrl() {
@@ -76,6 +76,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function redirectIfAlreadySignedIn() {
+    try {
+      let currentUser = typeof auth.getCurrentUser === "function" ? auth.getCurrentUser() : null;
+      if (!currentUser?.uid && typeof auth.waitForAuthState === "function") {
+        currentUser = await auth.waitForAuthState(2500);
+      }
+      if (currentUser?.uid) {
+        window.location.replace(getRedirectUrl());
+        return true;
+      }
+    } catch (error) {
+      console.error("create-account.js: Failed to check existing session", error);
+    }
+    return false;
+  }
+
   createBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
@@ -107,9 +123,11 @@ document.addEventListener("DOMContentLoaded", () => {
       window.location.href = getRedirectUrl();
     } catch (error) {
       console.error("Account creation failed:", error);
-      alert(error.message || formatCreateError(error));
+      alert(formatCreateError(error));
     } finally {
       createBtn.disabled = false;
     }
   });
+
+  redirectIfAlreadySignedIn().catch(() => {});
 });

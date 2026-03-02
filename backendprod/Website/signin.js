@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
   const signinBtn = document.getElementById("signinBtn");
@@ -78,6 +78,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function redirectIfAlreadySignedIn() {
+    try {
+      let currentUser = typeof auth.getCurrentUser === "function" ? auth.getCurrentUser() : null;
+      if (!currentUser?.uid && typeof auth.waitForAuthState === "function") {
+        currentUser = await auth.waitForAuthState(2500);
+      }
+      if (currentUser?.uid) {
+        window.location.replace(getRedirectUrl());
+        return true;
+      }
+    } catch (error) {
+      console.error("signin.js: Failed to check existing session", error);
+    }
+    return false;
+  }
+
   signinBtn.addEventListener("click", async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
@@ -111,10 +127,12 @@ document.addEventListener("DOMContentLoaded", () => {
       window.location.href = getRedirectUrl();
     } catch (error) {
       console.error("Sign in failed:", error);
-      const message = error.message || "Sign in failed.";
+      const message = formatSignInError(error);
       alert(message);
     } finally {
       signinBtn.disabled = false;
     }
   });
+
+  redirectIfAlreadySignedIn().catch(() => {});
 });

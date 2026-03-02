@@ -25,7 +25,21 @@
     return null;
   }
 
+  function getAuthService() {
+    if (window.authService && typeof window.authService === "object") {
+      return window.authService;
+    }
+    return null;
+  }
+
   function getCurrentUser() {
+    const service = getAuthService();
+    if (service && typeof service.getCurrentUser === "function") {
+      const user = service.getCurrentUser();
+      if (user?.uid) {
+        return user;
+      }
+    }
     return readJson("currentUser", null);
   }
 
@@ -94,10 +108,31 @@
   }
 
   function isConfigured() {
+    const service = getAuthService();
+    if (service && typeof service.isConfigured === "function") {
+      return Boolean(service.isConfigured());
+    }
     return Boolean(window.firebaseReady && getAuthInstance());
   }
 
+  async function ensureReady() {
+    const service = getAuthService();
+    if (service && typeof service.ensureReady === "function") {
+      await service.ensureReady();
+    }
+  }
+
   async function syncCurrentUser() {
+    const service = getAuthService();
+    if (service && typeof service.waitForAuthState === "function") {
+      const user = await service.waitForAuthState(5000);
+      if (user) {
+        return upsertLocalUser(user);
+      }
+      clearCurrentUser();
+      return null;
+    }
+
     const auth = getAuthInstance();
 
     if (!auth) {
@@ -143,6 +178,13 @@
   }
 
   async function signOut() {
+    const service = getAuthService();
+    if (service && typeof service.signOut === "function") {
+      await service.signOut();
+      clearCurrentUser();
+      return;
+    }
+
     const auth = getAuthInstance();
 
     if (auth) {
@@ -159,6 +201,7 @@
     updateCurrentUser,
     upsertLocalUser,
     syncCurrentUser,
+    ensureReady,
     signOut,
     isConfigured,
     getAuthInstance

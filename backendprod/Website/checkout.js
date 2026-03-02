@@ -1407,7 +1407,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function showAuthPrompt() {
     const productId = product?.id || resolvedProductId;
-    authSigninLink.href = `signin.html?from=checkout&product_id=${productId}`;
+    authSigninLink.href = `login.html?from=checkout&product_id=${productId}`;
     authCreateLink.href = `create-account.html?from=checkout&product_id=${productId}`;
     authPrompt.classList.remove("hidden");
   }
@@ -1486,7 +1486,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const user = getCurrentUser();
 
     if (!user) {
-      userStatus.innerHTML = `<a href="signin.html?from=checkout&product_id=${resolvedProductId}" class="signin">Sign in</a>`;
+      userStatus.innerHTML = `<a href="login.html?from=checkout&product_id=${resolvedProductId}" class="signin">Sign in</a>`;
       return;
     }
 
