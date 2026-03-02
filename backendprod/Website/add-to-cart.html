@@ -4,9 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Add To Cart</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: #111111;
+    font-family: "Inter", Arial, sans-serif;
+  }
+
+  #addCartStatus {
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+</style>
 </head>
 <body>
-<p id="addCartStatus" style="font-family:Inter,sans-serif;padding:16px;">Adding item to cart...</p>
+<p id="addCartStatus">Adding item to cart...</p>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>

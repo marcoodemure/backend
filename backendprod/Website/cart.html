@@ -7,25 +7,22 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Cart</title>
-<link rel="stylesheet" href="style.css?v=20260302cart3">
+<link rel="stylesheet" href="style.css?v=20260302white1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   body {
-    background:
-      radial-gradient(1200px 500px at 8% -20%, rgba(30, 64, 175, 0.12), transparent 60%),
-      radial-gradient(900px 480px at 95% -10%, rgba(13, 148, 136, 0.12), transparent 62%),
-      #eef2ff;
+    background: #ffffff;
     min-height: 100vh;
   }
 
   .cart-page {
-    background: rgba(255, 255, 255, 0.76);
-    backdrop-filter: blur(6px);
-    border: 1px solid rgba(148, 163, 184, 0.26);
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid #e5e7eb;
     border-radius: 20px;
-    box-shadow: 0 24px 44px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
     margin-top: 24px;
     padding: 20px;
   }
@@ -38,8 +35,8 @@
   }
 
   .cart-toolbar {
-    border: 1px solid #c7d2fe;
-    background: linear-gradient(135deg, #ffffff 0%, #eef2ff 100%);
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
   }
 
   .cart-toolbar-actions button {
@@ -52,7 +49,7 @@
 
   .cart-toolbar-actions button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 20px rgba(30, 64, 175, 0.16);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
   }
 
   .cart-toolbar-actions #cartCheckoutSelectedBtn {
@@ -62,14 +59,14 @@
   }
 
   .cart-item {
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid #dbe3f3;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
     box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
   }
 
   .cart-item:hover {
-    border-color: #93c5fd;
-    box-shadow: 0 14px 28px rgba(30, 64, 175, 0.14);
+    border-color: #d1d5db;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
   }
 
   .cart-item-check input[type="checkbox"],
@@ -89,7 +86,7 @@
   }
 
   .cart-item-price {
-    color: #1d4ed8;
+    color: #111827;
   }
 
   .cart-remove-btn {
@@ -107,8 +104,8 @@
 
   .cart-empty {
     border-radius: 18px;
-    border: 1px dashed #94a3b8;
-    background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+    border: 1px dashed #d1d5db;
+    background: #ffffff;
   }
 </style>
 </head>
@@ -146,3 +143,4 @@
 <script src="cart.js?v=20260302cart5"></script>
 </body>
 </html>
+
