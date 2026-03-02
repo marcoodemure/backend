@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const orderComplete = document.getElementById("orderComplete");
   const orderCompleteText = document.getElementById("orderCompleteText");
+  const checkoutNextBtn = document.getElementById("checkoutNextBtn");
   const pickupCompleteInfo = document.getElementById("pickupCompleteInfo");
   const pickupClaimWrap = document.getElementById("pickupClaimWrap");
   const pickupClaimQrImage = document.getElementById("pickupClaimQrImage");
@@ -77,6 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const auth = window.authService;
   const appDb = window.appDb;
+  const CHECKOUT_QUEUE_KEY = "checkoutQueueV1";
 
   const requiredElements = {
     shipBtn,
@@ -106,6 +108,73 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.error(`Failed to parse localStorage key: ${key}`, err);
       return fallback;
     }
+  }
+
+  function normalizeCheckoutQueue(list) {
+    const source = Array.isArray(list) ? list : [];
+    return source
+      .map((entry) => {
+        const productId = Number(entry?.productId);
+        const quantity = Math.max(1, Number(entry?.quantity) || 1);
+        if (!Number.isFinite(productId) || productId <= 0) {
+          return null;
+        }
+        return {
+          productId: Math.floor(productId),
+          quantity
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function getCheckoutQueue() {
+    return normalizeCheckoutQueue(readJson(CHECKOUT_QUEUE_KEY, []));
+  }
+
+  function setCheckoutQueue(items) {
+    const safe = normalizeCheckoutQueue(items);
+    if (!safe.length) {
+      localStorage.removeItem(CHECKOUT_QUEUE_KEY);
+      return;
+    }
+    localStorage.setItem(CHECKOUT_QUEUE_KEY, JSON.stringify(safe));
+  }
+
+  function consumeCheckoutQueueItem(productId) {
+    const safeProductId = Number(productId);
+    if (!Number.isFinite(safeProductId) || safeProductId <= 0) {
+      return;
+    }
+    const queue = getCheckoutQueue();
+    if (!queue.length) return;
+
+    if (queue[0].productId === safeProductId) {
+      queue.shift();
+      setCheckoutQueue(queue);
+      return;
+    }
+
+    const filtered = queue.filter((entry) => entry.productId !== safeProductId);
+    if (filtered.length !== queue.length) {
+      setCheckoutQueue(filtered);
+    }
+  }
+
+  function syncNextCheckoutButton() {
+    if (!checkoutNextBtn) return;
+    const queue = getCheckoutQueue();
+    if (!queue.length) {
+      checkoutNextBtn.classList.add("hidden");
+      checkoutNextBtn.removeAttribute("href");
+      return;
+    }
+
+    const nextItem = queue[0];
+    checkoutNextBtn.href = `checkout.html?product_id=${encodeURIComponent(String(nextItem.productId))}&from=cart`;
+    checkoutNextBtn.textContent = queue.length > 1
+      ? `Checkout next item (${queue.length} left)`
+      : "Checkout next item";
+    checkoutNextBtn.classList.remove("hidden");
   }
 
   function getCurrentUser() {
@@ -1151,19 +1220,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   let pendingDraft = readJson("pendingOrderDraft", null);
+  const queueItems = getCheckoutQueue();
+  const queueEntry = !(Number.isFinite(requestedProductId) && requestedProductId > 0) && queueItems.length
+    ? queueItems[0]
+    : null;
   const resolvedProductId = Number.isFinite(requestedProductId) && requestedProductId > 0
     ? requestedProductId
-    : 0;
+    : (queueEntry?.productId || 0);
 
   if (!resolvedProductId) {
-    cartSummary.innerHTML = "<p>Missing product_id in URL. Open checkout using checkout.html?product_id=YOUR_ID.</p>";
+    cartSummary.innerHTML = '<p>Missing product_id in URL. Open checkout using checkout.html?product_id=YOUR_ID or from <a href="cart.html">cart.html</a>.</p>';
     payBtn.disabled = true;
     return;
   }
 
   let deliveryMethod = "ship";
   let product = null;
-  let quantity = Number(localStorage.getItem("cartQuantity")) || 1;
+  let quantity = queueEntry?.quantity || Number(localStorage.getItem("cartQuantity")) || 1;
   let remoteCartLoaded = false;
   let activePaymentSessionId = null;
   let stopPaymentSessionWatch = null;
@@ -1479,6 +1552,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateCheckoutProgress();
     payBtn.disabled = true;
     payBtn.innerText = "Order complete";
+    syncNextCheckoutButton();
     hideAuthPrompt();
   }
 
@@ -1668,10 +1742,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       localStorage.removeItem("cartQuantity");
       localStorage.removeItem("pendingOrderDraft");
       pendingDraft = null;
+      consumeCheckoutQueueItem(draft?.productId || order?.productId || 0);
       return order;
     }
 
-    return placeOrderLocal(draft);
+    const localOrder = await placeOrderLocal(draft);
+    consumeCheckoutQueueItem(draft?.productId || localOrder?.productId || 0);
+    return localOrder;
   }
 
   async function startMockQrPayment(orderDraft) {
@@ -1974,7 +2051,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
   } else {
-    quantity = Math.max(1, Number(localStorage.getItem("cartQuantity")) || 1);
+    quantity = queueEntry?.quantity
+      ? Math.max(1, Number(queueEntry.quantity) || 1)
+      : Math.max(1, Number(localStorage.getItem("cartQuantity")) || 1);
   }
 
   await syncUserAndProfile();
@@ -2001,6 +2080,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateCheckoutProgress();
   renderCart();
   await persistCartState();
+  syncNextCheckoutButton();
 
   document.querySelectorAll('input[name="shipping"]').forEach((radio) => {
     radio.addEventListener("change", () => {

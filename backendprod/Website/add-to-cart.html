@@ -87,88 +87,33 @@
     return;
   }
 
-  let currentQty = 0;
-  let shippingOption = "standard_shipping";
-  let paymentMethod = "cash_on_delivery";
-  let deliveryMethod = "ship";
-  let orderNotes = "";
-  let shippingLocation = null;
-  let shippingLocationSnapshot = null;
-  let shippingLocationConfirmed = false;
-
-  if (appDb && appDb.isConfigured() && typeof appDb.getCart === "function") {
+  let nextQty = qtyToAdd;
+  if (appDb && appDb.isConfigured() && typeof appDb.addCartItem === "function") {
+    try {
+      const updatedItem = await appDb.addCartItem(user.uid, productId, qtyToAdd, {
+        contactEmail: user.email || ""
+      });
+      if (updatedItem?.quantity) {
+        nextQty = Math.max(1, Number(updatedItem.quantity) || qtyToAdd);
+      }
+    } catch (error) {
+      console.error("add-to-cart.html: Failed to add cart item", error);
+      statusEl.textContent = "Failed to save cart. Redirecting...";
+    }
+  } else if (appDb && appDb.isConfigured() && typeof appDb.setCart === "function") {
     try {
       const currentCart = await appDb.getCart(user.uid);
-      if (currentCart && Number(currentCart.productId) === productId) {
-        currentQty = Math.max(1, Number(currentCart.quantity) || 1);
-      }
-      if (currentCart?.shippingOption) {
-        shippingOption = currentCart.shippingOption;
-      }
-      if (currentCart?.paymentMethod) {
-        paymentMethod = currentCart.paymentMethod;
-      }
-      if (currentCart?.deliveryMethod) {
-        deliveryMethod = currentCart.deliveryMethod === "pickup" ? "pickup" : "ship";
-      }
-      if (typeof currentCart?.orderNotes === "string") {
-        orderNotes = currentCart.orderNotes;
-      }
-      if (
-        currentCart?.shippingLocation
-        && Number.isFinite(Number(currentCart.shippingLocation.lng))
-        && Number.isFinite(Number(currentCart.shippingLocation.lat))
-      ) {
-        shippingLocation = {
-          lng: Number(currentCart.shippingLocation.lng),
-          lat: Number(currentCart.shippingLocation.lat)
-        };
-      }
-      if (currentCart?.shippingLocationSnapshot?.mapUrl) {
-        shippingLocationSnapshot = {
-          embedUrl: String(currentCart.shippingLocationSnapshot.embedUrl || currentCart.shippingLocationSnapshot.imageUrl || ""),
-          imageUrl: String(currentCart.shippingLocationSnapshot.imageUrl || ""),
-          mapUrl: String(currentCart.shippingLocationSnapshot.mapUrl || "")
-        };
-      }
-      shippingLocationConfirmed = Boolean(currentCart?.shippingLocationConfirmed);
+      const currentQty = currentCart && Number(currentCart.productId) === productId
+        ? Math.max(1, Number(currentCart.quantity) || 1)
+        : 0;
+      nextQty = Math.max(1, currentQty + qtyToAdd);
+      await appDb.setCart(user.uid, {
+        productId,
+        quantity: nextQty,
+        contactEmail: user.email || ""
+      });
     } catch (error) {
-      console.error("add-to-cart.html: Failed to read current cart", error);
-    }
-  }
-
-  const nextQty = Math.max(1, currentQty + qtyToAdd);
-  let product = null;
-  if (appDb && appDb.isConfigured() && typeof appDb.getProductById === "function") {
-    try {
-      product = await appDb.getProductById(productId);
-    } catch (error) {
-      console.error("add-to-cart.html: Failed to load product details", error);
-    }
-  }
-
-  const draft = {
-    productId,
-    productName: product?.name || `Product #${productId}`,
-    productSize: product?.size || "N/A",
-    productImage: product?.image || "",
-    quantity: nextQty,
-    unitPrice: Number(product?.price) || 0,
-    shippingOption,
-    paymentMethod,
-    deliveryMethod,
-    orderNotes,
-    contactEmail: user.email || "",
-    shippingLocation,
-    shippingLocationSnapshot,
-    shippingLocationConfirmed
-  };
-
-  if (appDb && appDb.isConfigured() && typeof appDb.setCart === "function") {
-    try {
-      await appDb.setCart(user.uid, draft);
-    } catch (error) {
-      console.error("add-to-cart.html: Failed to persist cart", error);
+      console.error("add-to-cart.html: Legacy cart fallback failed", error);
       statusEl.textContent = "Failed to save cart. Redirecting...";
     }
   }

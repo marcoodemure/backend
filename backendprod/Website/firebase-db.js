@@ -1016,6 +1016,148 @@
     return product;
   }
 
+  function mapCartItem(value) {
+    const productId = normalizeProductId(value?.productId);
+    if (!productId) {
+      return null;
+    }
+
+    return {
+      productId,
+      quantity: Math.max(1, Number(value?.quantity) || 1),
+      productName: sanitizeString(value?.productName, ""),
+      productSize: sanitizeString(value?.productSize, ""),
+      productImage: sanitizeString(value?.productImage, ""),
+      unitPrice: Number(value?.unitPrice) || 0,
+      addedAt: normalizeDateValue(value?.addedAt) || sanitizeString(value?.addedAt, ""),
+      updatedAt: normalizeDateValue(value?.updatedAt) || sanitizeString(value?.updatedAt, "")
+    };
+  }
+
+  function normalizeCartItems(items) {
+    const source = Array.isArray(items) ? items : [];
+    const byProductId = new Map();
+
+    source.forEach((entry) => {
+      const parsed = mapCartItem(entry);
+      if (!parsed) {
+        return;
+      }
+
+      const existing = byProductId.get(parsed.productId);
+      if (!existing) {
+        byProductId.set(parsed.productId, { ...parsed });
+        return;
+      }
+
+      existing.quantity += parsed.quantity;
+      if (!existing.productName && parsed.productName) existing.productName = parsed.productName;
+      if (!existing.productSize && parsed.productSize) existing.productSize = parsed.productSize;
+      if (!existing.productImage && parsed.productImage) existing.productImage = parsed.productImage;
+      if (!existing.unitPrice && parsed.unitPrice) existing.unitPrice = parsed.unitPrice;
+      if (!existing.addedAt && parsed.addedAt) existing.addedAt = parsed.addedAt;
+      if (parsed.updatedAt) existing.updatedAt = parsed.updatedAt;
+    });
+
+    return Array.from(byProductId.values()).sort((a, b) => Number(a.productId) - Number(b.productId));
+  }
+
+  function upsertCartItems(items, incoming) {
+    const safeItems = normalizeCartItems(items);
+    const safeProductId = normalizeProductId(incoming?.productId);
+    if (!safeProductId) {
+      return safeItems;
+    }
+
+    const existing = safeItems.find((item) => item.productId === safeProductId) || null;
+    const nextItem = {
+      productId: safeProductId,
+      quantity: Math.max(1, Number(incoming?.quantity) || Number(existing?.quantity) || 1),
+      productName: sanitizeString(incoming?.productName, existing?.productName || ""),
+      productSize: sanitizeString(incoming?.productSize, existing?.productSize || ""),
+      productImage: sanitizeString(incoming?.productImage, existing?.productImage || ""),
+      unitPrice: Number(incoming?.unitPrice) || Number(existing?.unitPrice) || 0,
+      addedAt: sanitizeString(existing?.addedAt, sanitizeString(incoming?.addedAt, new Date().toISOString())),
+      updatedAt: sanitizeString(incoming?.updatedAt, new Date().toISOString())
+    };
+
+    const nextItems = safeItems.filter((item) => item.productId !== safeProductId);
+    nextItems.unshift(nextItem);
+    return nextItems;
+  }
+
+  function consumeCartItems(items, productId, quantity) {
+    const safeProductId = normalizeProductId(productId);
+    if (!safeProductId) {
+      return normalizeCartItems(items);
+    }
+
+    const amount = Math.max(1, Number(quantity) || 1);
+    const nextItems = [];
+
+    normalizeCartItems(items).forEach((item) => {
+      if (item.productId !== safeProductId) {
+        nextItems.push(item);
+        return;
+      }
+
+      const remaining = item.quantity - amount;
+      if (remaining > 0) {
+        nextItems.push({
+          ...item,
+          quantity: remaining,
+          updatedAt: new Date().toISOString()
+        });
+      }
+    });
+
+    return nextItems;
+  }
+
+  function normalizeCartShippingLocation(value) {
+    const lng = sanitizeCoordinate(value?.lng);
+    const lat = sanitizeCoordinate(value?.lat);
+    if (lng === null || lat === null) {
+      return null;
+    }
+    return { lng, lat };
+  }
+
+  function normalizeCartShippingSnapshot(value) {
+    const mapUrl = sanitizeString(value?.mapUrl, "");
+    const embedUrl = sanitizeString(value?.embedUrl, "");
+    const imageUrl = sanitizeString(value?.imageUrl, "");
+    if (!mapUrl && !embedUrl && !imageUrl) {
+      return null;
+    }
+    return {
+      mapUrl,
+      embedUrl: embedUrl || imageUrl,
+      imageUrl
+    };
+  }
+
+  function buildCartDocumentPayload(current, items, fallbackContactEmail) {
+    const safeItems = normalizeCartItems(items);
+    const firstItem = safeItems[0] || null;
+    const currentProductId = normalizeProductId(current?.productId);
+
+    return {
+      items: safeItems,
+      productId: firstItem?.productId || currentProductId || 0,
+      quantity: firstItem?.quantity || Math.max(1, Number(current?.quantity) || 1),
+      shippingOption: sanitizeMethod(current?.shippingOption, "standard_shipping"),
+      paymentMethod: sanitizeMethod(current?.paymentMethod, "cash_on_delivery"),
+      deliveryMethod: current?.deliveryMethod === "pickup" ? "pickup" : "ship",
+      orderNotes: sanitizeString(current?.orderNotes, ""),
+      contactEmail: sanitizeString(current?.contactEmail, fallbackContactEmail || ""),
+      shippingLocation: normalizeCartShippingLocation(current?.shippingLocation),
+      shippingLocationSnapshot: normalizeCartShippingSnapshot(current?.shippingLocationSnapshot),
+      shippingLocationConfirmed: Boolean(current?.shippingLocationConfirmed),
+      updatedAt: getServerTimestamp()
+    };
+  }
+
   async function getCart(uid) {
     const db = getDbInstance();
     if (!db || !uid) {
@@ -1028,25 +1170,36 @@
     }
 
     const data = snapshot.data() || {};
+    let items = normalizeCartItems(data.items);
+    const fallbackProductId = normalizeProductId(data.productId);
+    if (!items.length && fallbackProductId) {
+      items = [
+        {
+          productId: fallbackProductId,
+          quantity: Math.max(1, Number(data.quantity) || 1),
+          productName: sanitizeString(data.productName, ""),
+          productSize: sanitizeString(data.productSize, ""),
+          productImage: sanitizeString(data.productImage, ""),
+          unitPrice: Number(data.unitPrice) || 0,
+          addedAt: normalizeDateValue(data.createdAt) || normalizeDateValue(data.updatedAt) || "",
+          updatedAt: normalizeDateValue(data.updatedAt) || ""
+        }
+      ];
+    }
+
     return {
       id: snapshot.id,
-      productId: normalizeProductId(data.productId),
+      productId: fallbackProductId,
       quantity: Math.max(1, Number(data.quantity) || 1),
       shippingOption: sanitizeMethod(data.shippingOption, "standard_shipping"),
       paymentMethod: sanitizeMethod(data.paymentMethod, "cash_on_delivery"),
       deliveryMethod: data.deliveryMethod === "pickup" ? "pickup" : "ship",
       orderNotes: sanitizeString(data.orderNotes, ""),
       contactEmail: sanitizeString(data.contactEmail, ""),
-      shippingLocation: {
-        lng: sanitizeCoordinate(data.shippingLocation?.lng),
-        lat: sanitizeCoordinate(data.shippingLocation?.lat)
-      },
-      shippingLocationSnapshot: {
-        embedUrl: sanitizeString(data.shippingLocationSnapshot?.embedUrl, ""),
-        imageUrl: sanitizeString(data.shippingLocationSnapshot?.imageUrl, ""),
-        mapUrl: sanitizeString(data.shippingLocationSnapshot?.mapUrl, "")
-      },
+      shippingLocation: normalizeCartShippingLocation(data.shippingLocation),
+      shippingLocationSnapshot: normalizeCartShippingSnapshot(data.shippingLocationSnapshot),
       shippingLocationConfirmed: Boolean(data.shippingLocationConfirmed),
+      items,
       updatedAt: normalizeDateValue(data.updatedAt)
     };
   }
@@ -1058,23 +1211,177 @@
     }
 
     const safe = sanitizeDraft(draft);
+    const cartRef = db.collection("carts").doc(uid);
 
-    const payload = {
-      productId: safe.productId,
-      quantity: safe.quantity,
-      shippingOption: safe.shippingOption,
-      paymentMethod: safe.paymentMethod,
-      deliveryMethod: safe.deliveryMethod,
-      orderNotes: safe.orderNotes,
-      contactEmail: safe.contactEmail,
-      shippingLocation: safe.shippingLocation,
-      shippingLocationSnapshot: safe.shippingLocationSnapshot,
-      shippingLocationConfirmed: safe.shippingLocationConfirmed,
-      updatedAt: getServerTimestamp()
-    };
+    await db.runTransaction(async (transaction) => {
+      const cartSnap = await transaction.get(cartRef);
+      const current = cartSnap.exists ? (cartSnap.data() || {}) : {};
+      const currentItems = normalizeCartItems(current.items);
+      const nextItems = upsertCartItems(currentItems, {
+        productId: safe.productId,
+        quantity: safe.quantity,
+        productName: safe.productName || `Product #${safe.productId}`,
+        productSize: safe.productSize,
+        productImage: safe.productImage,
+        unitPrice: safe.unitPrice,
+        updatedAt: new Date().toISOString()
+      });
 
-    await db.collection("carts").doc(uid).set(payload, { merge: true });
-    return payload;
+      const payload = {
+        ...buildCartDocumentPayload(current, nextItems, safe.contactEmail),
+        productId: safe.productId,
+        quantity: safe.quantity,
+        shippingOption: safe.shippingOption,
+        paymentMethod: safe.paymentMethod,
+        deliveryMethod: safe.deliveryMethod,
+        orderNotes: safe.orderNotes,
+        contactEmail: safe.contactEmail,
+        shippingLocation: safe.shippingLocation,
+        shippingLocationSnapshot: safe.shippingLocationSnapshot,
+        shippingLocationConfirmed: safe.shippingLocationConfirmed
+      };
+
+      transaction.set(cartRef, payload, { merge: true });
+    });
+
+    return getCart(uid);
+  }
+
+  async function listCartItems(uid) {
+    const cart = await getCart(uid);
+    return Array.isArray(cart?.items) ? cart.items : [];
+  }
+
+  async function addCartItem(uid, productId, quantity, options) {
+    const db = getDbInstance();
+    if (!db || !uid) {
+      return null;
+    }
+
+    const safeProductId = normalizeProductId(productId);
+    if (!safeProductId) {
+      return null;
+    }
+
+    const safeQuantity = Math.max(1, Number(quantity) || 1);
+    let product = null;
+    try {
+      product = await getProductById(safeProductId);
+    } catch (error) {
+      console.error("Failed to resolve product for addCartItem", error);
+    }
+
+    const cartRef = db.collection("carts").doc(uid);
+    await db.runTransaction(async (transaction) => {
+      const cartSnap = await transaction.get(cartRef);
+      const current = cartSnap.exists ? (cartSnap.data() || {}) : {};
+      const currentItems = normalizeCartItems(current.items);
+      const existing = currentItems.find((item) => item.productId === safeProductId) || null;
+
+      const nextItems = upsertCartItems(currentItems, {
+        productId: safeProductId,
+        quantity: Number(existing?.quantity || 0) + safeQuantity,
+        productName: product?.name || sanitizeString(options?.productName, existing?.productName || `Product #${safeProductId}`),
+        productSize: product?.size || sanitizeString(options?.productSize, existing?.productSize || ""),
+        productImage: product?.image || sanitizeString(options?.productImage, existing?.productImage || ""),
+        unitPrice: Number(product?.price) || Number(options?.unitPrice) || Number(existing?.unitPrice) || 0,
+        updatedAt: new Date().toISOString()
+      });
+
+      const payload = buildCartDocumentPayload(current, nextItems, sanitizeString(options?.contactEmail, ""));
+      transaction.set(cartRef, payload, { merge: true });
+    });
+
+    const updated = await getCart(uid);
+    return updated?.items?.find((item) => item.productId === safeProductId) || null;
+  }
+
+  async function updateCartItemQuantity(uid, productId, quantity) {
+    const db = getDbInstance();
+    if (!db || !uid) {
+      return [];
+    }
+
+    const safeProductId = normalizeProductId(productId);
+    if (!safeProductId) {
+      return listCartItems(uid);
+    }
+
+    const safeQuantity = Math.max(0, Number(quantity) || 0);
+    const cartRef = db.collection("carts").doc(uid);
+
+    await db.runTransaction(async (transaction) => {
+      const cartSnap = await transaction.get(cartRef);
+      if (!cartSnap.exists) {
+        return;
+      }
+
+      const current = cartSnap.data() || {};
+      const currentItems = normalizeCartItems(current.items);
+      const existing = currentItems.find((item) => item.productId === safeProductId);
+      if (!existing) {
+        return;
+      }
+
+      const nextItems = safeQuantity > 0
+        ? upsertCartItems(currentItems, {
+          ...existing,
+          quantity: safeQuantity,
+          updatedAt: new Date().toISOString()
+        })
+        : currentItems.filter((item) => item.productId !== safeProductId);
+
+      if (!nextItems.length) {
+        transaction.delete(cartRef);
+        return;
+      }
+
+      const payload = buildCartDocumentPayload(current, nextItems, "");
+      transaction.set(cartRef, payload, { merge: true });
+    });
+
+    return listCartItems(uid);
+  }
+
+  async function removeCartItems(uid, productIds) {
+    const db = getDbInstance();
+    if (!db || !uid) {
+      return [];
+    }
+
+    const targetIds = Array.isArray(productIds) ? productIds : [productIds];
+    const safeIds = Array.from(
+      new Set(
+        targetIds
+          .map((id) => normalizeProductId(id))
+          .filter((id) => id > 0)
+      )
+    );
+    if (!safeIds.length) {
+      return listCartItems(uid);
+    }
+
+    const cartRef = db.collection("carts").doc(uid);
+    await db.runTransaction(async (transaction) => {
+      const cartSnap = await transaction.get(cartRef);
+      if (!cartSnap.exists) {
+        return;
+      }
+
+      const current = cartSnap.data() || {};
+      const currentItems = normalizeCartItems(current.items);
+      const nextItems = currentItems.filter((item) => !safeIds.includes(item.productId));
+
+      if (!nextItems.length) {
+        transaction.delete(cartRef);
+        return;
+      }
+
+      const payload = buildCartDocumentPayload(current, nextItems, "");
+      transaction.set(cartRef, payload, { merge: true });
+    });
+
+    return listCartItems(uid);
   }
 
   async function clearCart(uid) {
@@ -1253,6 +1560,8 @@
     const productRef = safe.productId ? db.collection("products").doc(String(safe.productId)) : null;
 
     await db.runTransaction(async (transaction) => {
+      const cartSnap = await transaction.get(cartRef);
+      const cartData = cartSnap.exists ? (cartSnap.data() || {}) : {};
       let productData = null;
 
       if (productRef) {
@@ -1363,7 +1672,17 @@
       };
 
       transaction.set(orderRef, payload, { merge: true });
-      transaction.delete(cartRef);
+      const nextCartItems = consumeCartItems(cartData.items, safe.productId, safe.quantity);
+      if (nextCartItems.length) {
+        const nextCartPayload = buildCartDocumentPayload(
+          cartData,
+          nextCartItems,
+          safe.contactEmail || email || ""
+        );
+        transaction.set(cartRef, nextCartPayload, { merge: true });
+      } else if (cartSnap.exists) {
+        transaction.delete(cartRef);
+      }
 
     });
 
@@ -2404,6 +2723,10 @@
     deleteProduct,
     getProductById,
     getCart,
+    listCartItems,
+    addCartItem,
+    updateCartItemQuantity,
+    removeCartItems,
     setCart,
     clearCart,
     createPaymentSession,
