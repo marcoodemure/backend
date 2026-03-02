@@ -25,6 +25,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
+    <!-- Load auth-service.js before other helpers so that all pages share the same
+         authentication persistence. Without this, some embedded pages may not
+         detect the logged‑in user when embedded in an iframe. -->
+    <script src="auth-service.js"></script>
 <script src="firebase-auth-helpers.js"></script>
 <script src="firebase-db.js"></script>
 <script src="payment-scan.js"></script>
