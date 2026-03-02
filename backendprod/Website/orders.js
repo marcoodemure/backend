@@ -216,7 +216,7 @@
   }
 
   function getCartUrl(productId) {
-    return productId ? `checkout.html?product_id=${productId}` : "index.html";
+    return productId ? `cart.html?product_id=${productId}` : "cart.html";
   }
 
   function getInvoiceUrl(order) {

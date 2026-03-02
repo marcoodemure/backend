@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<p id="cartStatus" style="font-family:Inter,sans-serif;padding:16px;">Loading cart...</p>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth-service.js"></script>
+<script src="firebase-auth-helpers.js"></script>
+<script src="firebase-db.js"></script>
+<script>
+(async function () {
+  const statusEl = document.getElementById("cartStatus");
+  const params = new URLSearchParams(window.location.search);
+  const auth = window.authService;
+  const appDb = window.appDb;
+
+  function toProductId(value) {
+    const id = Number(value);
+    return Number.isFinite(id) && id > 0 ? Math.floor(id) : 0;
+  }
+
+  function goToCheckout(productId, quantity) {
+    if (!productId) return false;
+    try {
+      localStorage.setItem("cartProductId", String(productId));
+      if (Number.isFinite(Number(quantity)) && Number(quantity) > 0) {
+        localStorage.setItem("cartQuantity", String(Math.max(1, Math.floor(Number(quantity)))));
+      }
+    } catch {}
+    window.location.replace(`checkout.html?product_id=${encodeURIComponent(String(productId))}`);
+    return true;
+  }
+
+  const directProductId = toProductId(params.get("product_id"));
+  if (directProductId) {
+    goToCheckout(directProductId, params.get("qty"));
+    return;
+  }
+
+  let user = null;
+  if (auth && typeof auth.getCurrentUser === "function") {
+    user = auth.getCurrentUser();
+  }
+  if (!user?.uid && auth && typeof auth.waitForAuthState === "function") {
+    user = await auth.waitForAuthState(4500);
+  }
+
+  if (user?.uid && appDb && appDb.isConfigured() && typeof appDb.getCart === "function") {
+    try {
+      const cart = await appDb.getCart(user.uid);
+      if (cart?.productId) {
+        goToCheckout(cart.productId, cart.quantity);
+        return;
+      }
+    } catch (error) {
+      console.error("cart.html: Failed to fetch remote cart", error);
+    }
+  }
+
+  const localProductId = toProductId(localStorage.getItem("cartProductId"));
+  if (localProductId) {
+    goToCheckout(localProductId, localStorage.getItem("cartQuantity"));
+    return;
+  }
+
+  if (!user?.uid) {
+    window.location.replace("login.html?from=cart");
+    return;
+  }
+
+  statusEl.innerHTML = 'Your cart is empty. <a href="orders.html">Go to orders</a>.';
+})();
+</script>
+</body>
+</html>

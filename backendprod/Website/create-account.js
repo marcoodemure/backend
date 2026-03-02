@@ -17,14 +17,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const pageParams = new URLSearchParams(window.location.search);
+  const passthroughKeys = ["from", "product_id", "qty", "next"];
 
   if (signinLink) {
     const linkParams = new URLSearchParams();
-    const from = pageParams.get("from");
-    const productId = pageParams.get("product_id");
-
-    if (from) linkParams.set("from", from);
-    if (productId) linkParams.set("product_id", productId);
+    passthroughKeys.forEach((key) => {
+      const value = pageParams.get(key);
+      if (value) {
+        linkParams.set(key, value);
+      }
+    });
 
     const query = linkParams.toString();
     signinLink.href = query ? `login.html?${query}` : "login.html";
@@ -45,6 +47,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (from === "profile") {
       return "profile.html";
+    }
+
+    if (from === "cart") {
+      return paramProductId ? `cart.html?product_id=${paramProductId}` : "cart.html";
+    }
+
+    if (from === "add_to_cart") {
+      const qty = Math.max(1, Number(pageParams.get("qty")) || 1);
+      const next = pageParams.get("next") || "";
+      const linkParams = new URLSearchParams();
+      if (paramProductId) {
+        linkParams.set("product_id", String(paramProductId));
+      }
+      linkParams.set("qty", String(qty));
+      if (next) {
+        linkParams.set("next", next);
+      }
+      return `add-to-cart.html?${linkParams.toString()}`;
     }
 
     const pendingProductId = Number(pendingDraft?.productId);

@@ -209,7 +209,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     userPanel.innerHTML = `
       <span class="email">${user.email || "Signed in"}</span>
       <a href="orders.html" class="cartBtn">Orders</a>
-      <a href="checkout.html" class="cartBtn">Checkout</a>
+      <a href="cart.html" class="cartBtn">Cart</a>
       <button id="profileLogoutBtn" type="button">Log out</button>
     `;
   }
