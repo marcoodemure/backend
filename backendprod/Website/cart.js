@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const requireSignInFirst = query.get("signin_first") === "1";
   const preferTopSignInRedirect = query.get("signin_top") === "1";
   const signInRedirectRaw = String(query.get("signin_redirect") || "").trim();
-  const defaultSignInRedirectUrl = "login.html?from=cart";
+  const defaultSignInRedirectUrl = "signin.html?from=cart";
 
   function resolveSignInRedirectUrl(rawValue) {
     const value = String(rawValue || "").trim();
@@ -172,7 +172,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!cartUserPanel) return;
     if (!user) {
       cartUserPanel.innerHTML = `
-        <a href="login.html?from=cart" class="signinBtn">Sign in</a>
+        <a href="signin.html?from=cart" class="signinBtn">Sign in</a>
         <a href="create-account.html?from=cart" class="cartBtn">Create account</a>
       `;
       return;
@@ -492,7 +492,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     setFeedback("info", "Please sign in to view your cart.");
-    cartList.innerHTML = `<p><a href="login.html?from=cart">Sign in</a> to continue.</p>`;
+    cartList.innerHTML = `<p><a href="signin.html?from=cart">Sign in</a> to continue.</p>`;
     return;
   }
 
