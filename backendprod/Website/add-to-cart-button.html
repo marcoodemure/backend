@@ -8,6 +8,9 @@
   :root {
     --btn-bg: #111111;
     --btn-color: #ffffff;
+    --btn-ok-bg: #e9f9ef;
+    --btn-ok-color: #0f8a3c;
+    --btn-ok-border: #16a34a;
     --ok: #0f8a3c;
     --err: #b91c1c;
   }
@@ -16,6 +19,7 @@
     padding: 0;
     background: transparent;
     font-family: "Inter", Arial, sans-serif;
+    display: inline-block;
   }
   .wrap {
     display: inline-flex;
@@ -23,8 +27,12 @@
     gap: 8px;
     padding: 4px;
   }
+  body.compact .wrap {
+    gap: 0;
+    padding: 0;
+  }
   #addToCartBtn {
-    border: 0;
+    border: 1px solid transparent;
     border-radius: 10px;
     background: var(--btn-bg);
     color: var(--btn-color);
@@ -33,6 +41,11 @@
     padding: 10px 14px;
     cursor: pointer;
     line-height: 1.1;
+  }
+  #addToCartBtn.is-added {
+    background: var(--btn-ok-bg);
+    border-color: var(--btn-ok-border);
+    color: var(--btn-ok-color);
   }
   #addToCartBtn:disabled {
     opacity: 0.7;
@@ -48,6 +61,9 @@
   }
   #addToCartMessage.err {
     color: var(--err);
+  }
+  body.compact #addToCartMessage {
+    display: none;
   }
 </style>
 </head>
@@ -72,6 +88,11 @@
   const appDb = window.appDb;
   const button = document.getElementById("addToCartBtn");
   const message = document.getElementById("addToCartMessage");
+  const isCompact = params.get("compact") === "1";
+  let restoreTimer = null;
+  if (isCompact) {
+    document.body.classList.add("compact");
+  }
 
   function toProductId(value) {
     const id = Number(value);
@@ -136,7 +157,12 @@
   async function handleClick() {
     const productId = toProductId(params.get("product_id"));
     const qty = toQty(params.get("qty"));
-    const okText = String(params.get("ok_text") || "Added to cart").trim();
+    const okText = String(params.get("ok_text") || "Added to cart successfully").trim();
+    const okBtnText = String(params.get("ok_btn_text") || "Added").trim();
+    const okHoldMsRaw = Number(params.get("ok_hold_ms"));
+    const okHoldMs = Number.isFinite(okHoldMsRaw)
+      ? Math.max(800, Math.min(10000, Math.floor(okHoldMsRaw)))
+      : 1800;
     const errText = String(params.get("err_text") || "Failed to add to cart").trim();
 
     if (!productId) {
@@ -150,6 +176,12 @@
 
     button.disabled = true;
     const previousLabel = button.textContent;
+    let deferLabelRestore = false;
+    if (restoreTimer) {
+      clearTimeout(restoreTimer);
+      restoreTimer = null;
+    }
+    button.classList.remove("is-added");
     button.textContent = "Adding...";
     setMessage("", "");
 
@@ -184,12 +216,25 @@
       }
 
       saveLocalCart(productId, finalQty);
-      setMessage(okText, "ok");
+      deferLabelRestore = true;
+      button.classList.add("is-added");
+      button.textContent = okBtnText;
+      if (!isCompact) {
+        setMessage(okText, "ok");
+      }
+      restoreTimer = setTimeout(() => {
+        button.classList.remove("is-added");
+        button.textContent = previousLabel;
+        restoreTimer = null;
+      }, okHoldMs);
     } catch (error) {
       console.error("add-to-cart-button: add failed", error);
       setMessage(errText, "err");
     } finally {
-      button.textContent = previousLabel;
+      if (!deferLabelRestore) {
+        button.classList.remove("is-added");
+        button.textContent = previousLabel;
+      }
       button.disabled = false;
     }
   }
