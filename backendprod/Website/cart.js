@@ -11,10 +11,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cartList = document.getElementById("cartList");
   const query = new URLSearchParams(window.location.search);
   const requireSignInFirst = query.get("signin_first") === "1";
+  const preferTopSignInRedirect = query.get("signin_top") === "1";
   const signInRedirectRaw = String(query.get("signin_redirect") || "").trim();
-  const notLoggedInRedirectUrl = /^https?:\/\//i.test(signInRedirectRaw)
-    ? signInRedirectRaw
-    : "https://sites.google.com/view/habitlikha/home/profile";
+  const defaultSignInRedirectUrl = "login.html?from=cart";
+
+  function resolveSignInRedirectUrl(rawValue) {
+    const value = String(rawValue || "").trim();
+    if (!value) {
+      return defaultSignInRedirectUrl;
+    }
+
+    // Keep redirect target frame-friendly by default:
+    // prefer same-origin pages so Google Sites iframe sandbox/CSP does not block.
+    try {
+      const url = new URL(value, window.location.href);
+      if (url.origin === window.location.origin) {
+        return url.href;
+      }
+    } catch {}
+
+    return defaultSignInRedirectUrl;
+  }
+
+  const notLoggedInRedirectUrl = resolveSignInRedirectUrl(signInRedirectRaw);
 
   const CHECKOUT_QUEUE_KEY = "checkoutQueueV1";
 
@@ -127,12 +146,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function redirectToSignInPage() {
-    try {
-      if (window.top && window.top !== window) {
-        window.top.location.replace(notLoggedInRedirectUrl);
-        return;
-      }
-    } catch {}
+    if (preferTopSignInRedirect) {
+      try {
+        if (window.top && window.top !== window) {
+          window.top.location.replace(notLoggedInRedirectUrl);
+          return;
+        }
+      } catch {}
+    }
     window.location.replace(notLoggedInRedirectUrl);
   }
 
