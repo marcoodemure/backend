@@ -2629,19 +2629,42 @@ button:hover,
   border: 3px solid #dbeafe;
   border-top-color: #2563eb;
   margin: 4px auto 10px;
-  animation: spin .9s linear infinite;
+  animation: spin .85s linear infinite;
+  position: relative;
+  display: grid;
+  place-items: center;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+
+.scan-loader::before {
+  content: "";
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .scan-card[data-state="success"] .scan-loader {
   border-color: #bbf7d0;
-  border-top-color: #16a34a;
-  animation-duration: 1.25s;
+  border-top-color: #bbf7d0;
+  background: #f0fdf4;
+  animation: none;
+}
+
+.scan-card[data-state="success"] .scan-loader::before {
+  content: "\2713";
+  color: #16a34a;
 }
 
 .scan-card[data-state="error"] .scan-loader {
   border-color: #fecaca;
-  border-top-color: #dc2626;
-  animation-duration: 1.25s;
+  border-top-color: #fecaca;
+  background: #fef2f2;
+  animation: none;
+}
+
+.scan-card[data-state="error"] .scan-loader::before {
+  content: "!";
+  color: #dc2626;
 }
 
 .scan-card[data-state="success"] #scanStatusText {

@@ -1240,6 +1240,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   let remoteCartLoaded = false;
   let activePaymentSessionId = null;
   let stopPaymentSessionWatch = null;
+  let paymentStatusPollTimer = null;
+  let paymentStatusPollBusy = false;
+  let runPaymentStatusSync = null;
   let paymentFinalizing = false;
   let payButtonLoading = false;
   let addressMap = null;
@@ -1494,6 +1497,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       stopPaymentSessionWatch();
       stopPaymentSessionWatch = null;
     }
+    if (paymentStatusPollTimer) {
+      clearInterval(paymentStatusPollTimer);
+      paymentStatusPollTimer = null;
+    }
+    paymentStatusPollBusy = false;
+    runPaymentStatusSync = null;
   }
 
   function hideQrPaymentModal(options) {
@@ -1795,52 +1804,85 @@ document.addEventListener("DOMContentLoaded", async () => {
     setPayButtonLoading(true, "Waiting for scan...");
 
     stopPaymentWatcher();
+    const handlePaidPaymentSession = async (paymentSession) => {
+      if (!paymentSession || paymentFinalizing) {
+        return;
+      }
+
+      if (paymentSession.status !== "paid" && paymentSession.status !== "completed") {
+        return;
+      }
+
+      paymentFinalizing = true;
+      qrPaymentStatus.textContent = "Scan detected. Finalizing order...";
+      setCheckoutFeedback("info", "Payment detected. Finalizing your order...");
+      setPayButtonLoading(true, "Finalizing order...");
+
+      try {
+        const order = await placeOrder({
+          ...orderDraft,
+          paymentSessionId: session.id
+        });
+
+        if (order) {
+          if (appDb.markPaymentSessionCompleted) {
+            await appDb.markPaymentSessionCompleted(session.id, order.id).catch((error) => {
+              console.error("Failed to mark payment session completed", error);
+            });
+          }
+          showOrderComplete(order);
+        }
+      } catch (error) {
+        paymentFinalizing = false;
+        console.error("Failed to finalize QR payment order", error);
+        qrPaymentStatus.textContent = "Payment detected but order creation failed. Try again.";
+        setCheckoutFeedback("error", "Payment detected but we could not create the order. Please try again.");
+        setPayButtonLoading(false);
+      }
+    };
+
+    const pollPaymentStatusOnce = async () => {
+      if (!activePaymentSessionId || paymentFinalizing || paymentStatusPollBusy || !appDb.getPaymentSession) {
+        return;
+      }
+
+      paymentStatusPollBusy = true;
+      try {
+        const latest = await appDb.getPaymentSession(activePaymentSessionId);
+        await handlePaidPaymentSession(latest);
+      } catch (error) {
+        console.error("Payment status poll failed", error);
+      } finally {
+        paymentStatusPollBusy = false;
+      }
+    };
+
+    runPaymentStatusSync = pollPaymentStatusOnce;
 
     stopPaymentSessionWatch = appDb.watchPaymentSession(
       session.id,
-      async (paymentSession) => {
-        if (!paymentSession || paymentFinalizing) {
-          return;
-        }
-
-        if (paymentSession.status !== "paid" && paymentSession.status !== "completed") {
-          return;
-        }
-
-        paymentFinalizing = true;
-        qrPaymentStatus.textContent = "Scan detected. Finalizing order...";
-        setCheckoutFeedback("info", "Payment detected. Finalizing your order...");
-        setPayButtonLoading(true, "Finalizing order...");
-
-        try {
-          const order = await placeOrder({
-            ...orderDraft,
-            paymentSessionId: session.id
-          });
-
-          if (order) {
-            if (appDb.markPaymentSessionCompleted) {
-              await appDb.markPaymentSessionCompleted(session.id, order.id).catch((error) => {
-                console.error("Failed to mark payment session completed", error);
-              });
-            }
-            showOrderComplete(order);
-          }
-        } catch (error) {
-          paymentFinalizing = false;
-          console.error("Failed to finalize QR payment order", error);
-          qrPaymentStatus.textContent = "Payment detected but order creation failed. Try again.";
-          setCheckoutFeedback("error", "Payment detected but we could not create the order. Please try again.");
-          setPayButtonLoading(false);
-        }
+      (paymentSession) => {
+        handlePaidPaymentSession(paymentSession).catch((error) => {
+          console.error("Failed to process realtime payment session", error);
+        });
       },
       (error) => {
         console.error("Payment session listener failed", error);
-        qrPaymentStatus.textContent = "Realtime payment listener failed.";
-        setCheckoutFeedback("error", "Payment listener failed. Please close this QR modal and try again.");
-        setPayButtonLoading(false);
+        qrPaymentStatus.textContent = "Realtime listener interrupted. Checking payment status...";
+        setCheckoutFeedback("info", "Realtime listener interrupted. Verifying payment status...");
+        setPayButtonLoading(true, "Checking status...");
       }
     );
+
+    if (appDb.getPaymentSession) {
+      paymentStatusPollTimer = setInterval(() => {
+        pollPaymentStatusOnce().catch((error) => console.error("Payment status sync failed", error));
+      }, 900);
+
+      setTimeout(() => {
+        pollPaymentStatusOnce().catch((error) => console.error("Initial payment status sync failed", error));
+      }, 250);
+    }
   }
 
   function setDeliveryMethod(nextMethod) {
@@ -2007,6 +2049,48 @@ document.addEventListener("DOMContentLoaded", async () => {
       setCheckoutFeedback("info", "QR payment canceled.");
     });
   }
+
+  function triggerPaymentSignalSync(sessionId) {
+    if (!sessionId || !activePaymentSessionId || sessionId !== activePaymentSessionId) {
+      return;
+    }
+    if (!qrPaymentModal || qrPaymentModal.classList.contains("hidden")) {
+      return;
+    }
+
+    qrPaymentStatus.textContent = "Scan received. Verifying payment...";
+    setCheckoutFeedback("info", "Scan received. Verifying payment status...");
+    setPayButtonLoading(true, "Verifying payment...");
+
+    if (typeof runPaymentStatusSync === "function") {
+      runPaymentStatusSync().catch((error) => console.error("Failed to sync payment from signal", error));
+    }
+  }
+
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) {
+      return;
+    }
+    const data = event?.data || {};
+    if (data.type !== "checkout_qr_payment_paid") {
+      return;
+    }
+    triggerPaymentSignalSync(String(data.sessionId || "").trim());
+  });
+
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "checkout_qr_payment_signal" || !event.newValue) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(event.newValue);
+      if (!payload || payload.type !== "checkout_qr_payment_paid") {
+        return;
+      }
+      triggerPaymentSignalSync(String(payload.sessionId || "").trim());
+    } catch {}
+  });
 
   product = await loadProductById(resolvedProductId);
 

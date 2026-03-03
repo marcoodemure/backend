@@ -1804,8 +1804,18 @@
       return mapPaymentSession(existingSnapshot);
     }
 
-    const updatedSnapshot = await sessionRef.get();
-    return updatedSnapshot.exists ? mapPaymentSession(updatedSnapshot) : null;
+    return {
+      id: String(sessionId),
+      status: "paid",
+      source: String(meta?.source || "qr_scan"),
+      scannerMeta: {
+        userAgent: String(meta?.userAgent || ""),
+        scannedBy: String(meta?.scannedBy || ""),
+        scannedFrom: String(meta?.scannedFrom || "")
+      },
+      paidAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
   }
 
   async function markPaymentSessionCompleted(sessionId, orderId) {
