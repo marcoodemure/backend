@@ -89,6 +89,26 @@
     return null;
   }
 
+  function classifyAddError(error) {
+    const code = String(error?.code || "").toLowerCase();
+    if (code === "product_not_found" || code === "product_inactive") {
+      return {
+        message: "This product is unavailable.",
+        redirect: false
+      };
+    }
+    if (code === "permission-denied" || code === "unauthenticated" || code === "auth/user-token-expired") {
+      return {
+        message: "Session expired. Please sign in again.",
+        redirect: true
+      };
+    }
+    return {
+      message: "Failed to save cart. Please try again.",
+      redirect: false
+    };
+  }
+
   const productId = toProductId(params.get("product_id"));
   const qtyToAdd = toQty(params.get("qty"));
   const nextPage = normalizeNext(params.get("next"));
@@ -143,9 +163,18 @@
       didPersistCart = true;
     } catch (error) {
       console.error("add-to-cart.html: Failed to add cart item", error);
-      failureMessage = error?.code === "product_not_found"
-        ? "This product is unavailable."
-        : "Failed to save cart. Please try again.";
+      const mapped = classifyAddError(error);
+      failureMessage = mapped.message;
+      if (mapped.redirect) {
+        try {
+          if (window.top && window.top !== window) {
+            window.top.location.replace(notLoggedInRedirectUrl);
+            return;
+          }
+        } catch {}
+        window.location.replace(notLoggedInRedirectUrl);
+        return;
+      }
     }
   } else if (appDb && appDb.isConfigured() && typeof appDb.setCart === "function") {
     try {

@@ -132,6 +132,29 @@
       : fallbackMs;
   }
 
+  function classifyAddError(error, defaults) {
+    const code = String(error?.code || "").toLowerCase();
+    if (code === "product_not_found" || code === "product_inactive") {
+      return {
+        message: "This product is unavailable.",
+        buttonText: "Unavailable",
+        redirect: false
+      };
+    }
+    if (code === "permission-denied" || code === "unauthenticated" || code === "auth/user-token-expired") {
+      return {
+        message: "Session expired. Please sign in again.",
+        buttonText: "Sign in",
+        redirect: true
+      };
+    }
+    return {
+      message: defaults.message,
+      buttonText: defaults.buttonText,
+      redirect: false
+    };
+  }
+
   function setTimedButtonState(kind, text, previousLabel, holdMs) {
     if (restoreTimer) {
       clearTimeout(restoreTimer);
@@ -289,11 +312,20 @@
       }
     } catch (error) {
       console.error("add-to-cart-button: add failed", error);
+      const mapped = classifyAddError(error, {
+        message: errText,
+        buttonText: errBtnText
+      });
       if (isCompact) {
         deferLabelRestore = true;
-        setTimedButtonState("err", errBtnText, previousLabel, errHoldMs);
+        setTimedButtonState("err", mapped.buttonText, previousLabel, errHoldMs);
       } else {
-        setMessage(errText, "err");
+        setMessage(mapped.message, "err");
+      }
+      if (mapped.redirect) {
+        setTimeout(() => {
+          redirectIfNotLoggedIn();
+        }, 300);
       }
     } finally {
       if (!deferLabelRestore) {

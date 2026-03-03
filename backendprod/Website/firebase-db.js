@@ -1016,6 +1016,72 @@
     return product;
   }
 
+  let localCatalogProductsCache = null;
+  let localCatalogProductsPromise = null;
+
+  function normalizeCatalogProduct(raw) {
+    const id = normalizeProductId(raw?.id);
+    if (!id) {
+      return null;
+    }
+
+    return {
+      id,
+      name: sanitizeString(raw?.name, `Product ${id}`),
+      size: sanitizeString(raw?.size, "N/A"),
+      price: Number(raw?.price) || 0,
+      image: sanitizeString(raw?.image, ""),
+      category: sanitizeString(raw?.category, "General"),
+      tags: sanitizeTagList(raw?.tags),
+      stock: Number.isFinite(Number(raw?.stock)) ? Math.max(0, Number(raw.stock)) : null,
+      isActive: raw?.isActive !== false
+    };
+  }
+
+  async function loadCatalogProductsFallback() {
+    if (Array.isArray(localCatalogProductsCache)) {
+      return localCatalogProductsCache;
+    }
+
+    if (!localCatalogProductsPromise) {
+      localCatalogProductsPromise = (async () => {
+        try {
+          const response = await fetch("products.json", { cache: "no-store" });
+          if (!response.ok) {
+            return [];
+          }
+          const rows = await response.json();
+          if (!Array.isArray(rows)) {
+            return [];
+          }
+
+          return rows
+            .map(normalizeCatalogProduct)
+            .filter((product) => product && product.id > 0 && product.isActive !== false);
+        } catch (error) {
+          console.warn("Failed to load products.json fallback", error);
+          return [];
+        } finally {
+          localCatalogProductsPromise = null;
+        }
+      })();
+    }
+
+    const rows = await localCatalogProductsPromise;
+    localCatalogProductsCache = Array.isArray(rows) ? rows : [];
+    return localCatalogProductsCache;
+  }
+
+  async function getCatalogProductById(productId) {
+    const safeId = normalizeProductId(productId);
+    if (!safeId) {
+      return null;
+    }
+
+    const rows = await loadCatalogProductsFallback();
+    return rows.find((product) => product.id === safeId) || null;
+  }
+
   function mapCartItem(value) {
     const productId = normalizeProductId(value?.productId);
     if (!productId) {
@@ -1272,6 +1338,14 @@
       const lookupErr = new Error("product_lookup_failed");
       lookupErr.code = "product_lookup_failed";
       throw lookupErr;
+    }
+
+    if (!product || normalizeProductId(product.id) !== safeProductId) {
+      try {
+        product = await getCatalogProductById(safeProductId);
+      } catch (fallbackError) {
+        console.error("Failed to resolve products.json fallback for addCartItem", fallbackError);
+      }
     }
 
     if (!product || normalizeProductId(product.id) !== safeProductId) {
