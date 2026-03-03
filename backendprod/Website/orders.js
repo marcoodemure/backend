@@ -275,6 +275,13 @@
   let unsubscribeOrders = null;
   let unsubscribeReturns = null;
   let hasFilterBar = false;
+  let returnReasonModal = null;
+  let returnReasonInput = null;
+  let returnReasonError = null;
+  let returnReasonCounter = null;
+  let returnReasonOrderText = null;
+  let returnReasonResolver = null;
+  let lastFocusedBeforeReturnModal = null;
 
   function findProduct(order) {
     if (order.productName || order.productImage || order.productSize) {
@@ -351,15 +358,176 @@
     }
   }
 
-  async function requestReturn(order) {
-    const user = getCurrentUser();
-    if (!user?.uid || !isRemoteDbReady() || typeof appDb.createReturnRequest !== "function") {
-      alert("Return request API is unavailable.");
+  function ensureReturnReasonModal() {
+    if (returnReasonModal) {
       return;
     }
 
-    const reason = window.prompt("Reason for return request:");
-    if (!reason || !reason.trim()) {
+    returnReasonModal = document.createElement("div");
+    returnReasonModal.className = "return-modal hidden orders-return-modal";
+    returnReasonModal.innerHTML = `
+      <div class="return-modal-card orders-return-modal-card" role="dialog" aria-modal="true" aria-labelledby="ordersReturnReasonTitle">
+        <div class="return-modal-head">
+          <h3 id="ordersReturnReasonTitle" data-ui-icon="rotate-ccw">Request Return</h3>
+          <button id="ordersReturnCloseBtn" type="button" data-ui-icon="x-circle">Close</button>
+        </div>
+        <p id="ordersReturnOrderText" class="orders-return-order"></p>
+        <label class="orders-return-label" for="ordersReturnReasonInput">Reason for return</label>
+        <textarea
+          id="ordersReturnReasonInput"
+          class="orders-return-input"
+          maxlength="300"
+          rows="4"
+          placeholder="Please describe the reason for this return request."
+        ></textarea>
+        <p id="ordersReturnReasonError" class="orders-return-error hidden"></p>
+        <div class="orders-return-footer">
+          <span id="ordersReturnReasonCount" class="orders-return-count">0 / 300</span>
+          <div class="orders-return-actions">
+            <button id="ordersReturnCancelBtn" type="button" data-ui-icon="x">Cancel</button>
+            <button id="ordersReturnSubmitBtn" type="button" class="returnBtn" data-ui-icon="send">Submit request</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(returnReasonModal);
+
+    returnReasonInput = returnReasonModal.querySelector("#ordersReturnReasonInput");
+    returnReasonError = returnReasonModal.querySelector("#ordersReturnReasonError");
+    returnReasonCounter = returnReasonModal.querySelector("#ordersReturnReasonCount");
+    returnReasonOrderText = returnReasonModal.querySelector("#ordersReturnOrderText");
+    const closeBtn = returnReasonModal.querySelector("#ordersReturnCloseBtn");
+    const cancelBtn = returnReasonModal.querySelector("#ordersReturnCancelBtn");
+    const submitBtn = returnReasonModal.querySelector("#ordersReturnSubmitBtn");
+
+    function updateReasonCounter() {
+      if (!returnReasonInput || !returnReasonCounter) return;
+      returnReasonCounter.textContent = `${returnReasonInput.value.length} / 300`;
+    }
+
+    function closeReturnReasonModal(reason) {
+      if (!returnReasonModal || returnReasonModal.classList.contains("hidden")) {
+        return;
+      }
+
+      returnReasonModal.classList.add("hidden");
+      if (returnReasonError) {
+        returnReasonError.classList.add("hidden");
+        returnReasonError.textContent = "";
+      }
+
+      const resolver = returnReasonResolver;
+      returnReasonResolver = null;
+      if (typeof resolver === "function") {
+        resolver(reason || null);
+      }
+
+      if (lastFocusedBeforeReturnModal && typeof lastFocusedBeforeReturnModal.focus === "function") {
+        setTimeout(() => {
+          try {
+            lastFocusedBeforeReturnModal.focus();
+          } catch {}
+          lastFocusedBeforeReturnModal = null;
+        }, 0);
+      }
+    }
+
+    function showReasonError(message) {
+      if (!returnReasonError) return;
+      returnReasonError.textContent = message;
+      returnReasonError.classList.remove("hidden");
+    }
+
+    closeBtn?.addEventListener("click", () => closeReturnReasonModal(null));
+    cancelBtn?.addEventListener("click", () => closeReturnReasonModal(null));
+    returnReasonModal.addEventListener("click", (event) => {
+      if (event.target === returnReasonModal) {
+        closeReturnReasonModal(null);
+      }
+    });
+
+    returnReasonInput?.addEventListener("input", () => {
+      if (returnReasonError && !returnReasonError.classList.contains("hidden")) {
+        returnReasonError.classList.add("hidden");
+        returnReasonError.textContent = "";
+      }
+      updateReasonCounter();
+    });
+
+    returnReasonInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeReturnReasonModal(null);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        submitBtn?.click();
+      }
+    });
+
+    returnReasonModal.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeReturnReasonModal(null);
+      }
+    });
+
+    submitBtn?.addEventListener("click", () => {
+      const reason = String(returnReasonInput?.value || "").trim();
+      if (!reason) {
+        showReasonError("Please enter a reason before submitting.");
+        returnReasonInput?.focus();
+        return;
+      }
+
+      closeReturnReasonModal(reason);
+    });
+
+    updateReasonCounter();
+  }
+
+  function promptReturnReason(order) {
+    ensureReturnReasonModal();
+    if (!returnReasonModal || !returnReasonInput || !returnReasonOrderText) {
+      return Promise.resolve(null);
+    }
+
+    lastFocusedBeforeReturnModal = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+    const orderLabel = order?.id ? `Order ${order.id}` : "This order";
+    returnReasonOrderText.textContent = `${orderLabel}: tell us why you want to request a return.`;
+    returnReasonInput.value = "";
+    if (returnReasonError) {
+      returnReasonError.classList.add("hidden");
+      returnReasonError.textContent = "";
+    }
+    if (returnReasonCounter) {
+      returnReasonCounter.textContent = "0 / 300";
+    }
+
+    returnReasonModal.classList.remove("hidden");
+    setTimeout(() => {
+      returnReasonInput.focus();
+    }, 20);
+
+    return new Promise((resolve) => {
+      returnReasonResolver = resolve;
+    });
+  }
+
+  async function requestReturn(order) {
+    const user = getCurrentUser();
+    if (!user?.uid || !isRemoteDbReady() || typeof appDb.createReturnRequest !== "function") {
+      setOrdersFeedback("error", "Return request API is unavailable.");
+      return;
+    }
+
+    const reason = await promptReturnReason(order);
+    if (!reason) {
       return;
     }
 
@@ -515,9 +683,9 @@
           } catch (error) {
             console.error("Failed to cancel order", error);
             if (error?.code === "out_of_stock" || error?.message === "out_of_stock") {
-              alert("Cannot reopen this order state because stock changed.");
+              setOrdersFeedback("error", "Cannot reopen this order state because stock changed.");
             } else {
-              alert("Failed to cancel order. Please try again.");
+              setOrdersFeedback("error", "Failed to cancel order. Please try again.");
             }
           }
         });
