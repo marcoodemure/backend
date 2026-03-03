@@ -111,5 +111,43 @@ service cloud.firestore {
 
       allow update, delete: if false;
     }
+
+    match /donations/{donationId} {
+      allow read: if true;
+
+      allow create: if
+        request.resource.data.paymentSessionId == donationId
+        && (
+          request.resource.data.amount is int
+          || request.resource.data.amount is float
+        )
+        && request.resource.data.amount > 0
+        && request.resource.data.amount <= 1000000
+        && request.resource.data.currency is string
+        && request.resource.data.currency.size() > 0
+        && request.resource.data.currency.size() <= 8
+        && request.resource.data.donorName is string
+        && request.resource.data.donorName.size() > 0
+        && request.resource.data.donorName.size() <= 80
+        && request.resource.data.donorDisplayName is string
+        && request.resource.data.donorDisplayName.size() > 0
+        && request.resource.data.donorDisplayName.size() <= 80
+        && request.resource.data.isAnonymous is bool
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 500
+        && request.resource.data.status == "completed"
+        && request.resource.data.uid is string
+        && request.resource.data.uid.size() <= 128
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 160
+        && request.resource.data.source is string
+        && request.resource.data.source.size() > 0
+        && request.resource.data.source.size() <= 40
+        && request.resource.data.paymentMethod is string
+        && request.resource.data.paymentMethod.size() > 0
+        && request.resource.data.paymentMethod.size() <= 40;
+
+      allow update, delete: if false;
+    }
   }
 }

@@ -49,6 +49,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       return "profile.html";
     }
 
+    if (from === "donate") {
+      return "donate.html";
+    }
+
     if (from === "cart") {
       return paramProductId ? `cart.html?product_id=${paramProductId}` : "cart.html";
     }

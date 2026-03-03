@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const sessionId = String(params.get("session") || "").trim();
+  const paymentIntent = String(params.get("intent") || "").trim().toLowerCase();
   const statusText = document.getElementById("scanStatusText");
   const doneBtn = document.getElementById("scanDoneBtn");
   const scanCard = document.getElementById("scanCard");
@@ -18,9 +19,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if (scanHelp) {
       if (state === "success") {
-        scanHelp.textContent = "Checkout should update automatically in a few seconds.";
+        scanHelp.textContent = paymentIntent === "donation"
+          ? "Donation page should update automatically in a few seconds."
+          : "Checkout should update automatically in a few seconds.";
       } else if (state === "error") {
-        scanHelp.textContent = "If this fails, close this tab and rescan from checkout.";
+        scanHelp.textContent = paymentIntent === "donation"
+          ? "If this fails, close this tab and rescan from donation page."
+          : "If this fails, close this tab and rescan from checkout.";
       } else {
         scanHelp.textContent = defaultHelpText || "";
       }
@@ -80,28 +85,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     return "Failed to confirm payment scan. Please try again.";
   }
 
-  function notifyCheckout(session) {
-    const payload = {
-      type: "checkout_qr_payment_paid",
+  function notifyPaymentPaid(session) {
+    const basePayload = {
       sessionId: session,
+      intent: paymentIntent || "",
       timestamp: Date.now()
     };
 
+    const payloads = [
+      { ...basePayload, type: "payment_session_paid" },
+      { ...basePayload, type: "checkout_qr_payment_paid" }
+    ];
+
     try {
-      localStorage.setItem("checkout_qr_payment_signal", JSON.stringify(payload));
+      localStorage.setItem("payment_session_paid_signal", JSON.stringify(payloads[0]));
     } catch {}
 
     try {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage(payload, window.location.origin);
-      }
+      localStorage.setItem("checkout_qr_payment_signal", JSON.stringify(payloads[1]));
     } catch {}
 
-    try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage(payload, window.location.origin);
-      }
-    } catch {}
+    payloads.forEach((payload) => {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(payload, window.location.origin);
+        }
+      } catch {}
+
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(payload, window.location.origin);
+        }
+      } catch {}
+    });
   }
 
   if (doneBtn) {
@@ -131,9 +147,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       9000
     );
 
-    notifyCheckout(sessionId);
-    setStatus("Scan received. Payment confirmed. You can return to checkout.", "success");
-    revealDoneButton("Return to checkout");
+    notifyPaymentPaid(sessionId);
+    const successText = paymentIntent === "donation"
+      ? "Scan received. Donation payment confirmed. You can return now."
+      : "Scan received. Payment confirmed. You can return to checkout.";
+    const doneLabel = paymentIntent === "donation" ? "Return to donation" : "Return to checkout";
+    setStatus(successText, "success");
+    revealDoneButton(doneLabel);
 
     setTimeout(() => {
       try {

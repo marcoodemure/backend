@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Donation Receipt</title>
+<link rel="stylesheet" href="style.css?v=20260304donate1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="invoice-page donation-receipt-page">
+  <div class="invoice-topbar">
+    <a href="donate.html" class="invoice-back" data-ui-icon="arrow-left">Back to Donate</a>
+    <div class="invoice-actions">
+      <button id="downloadDonationPdfBtn" type="button" data-ui-icon="download">Download PDF</button>
+      <button id="printDonationReceiptBtn" type="button" data-ui-icon="printer">Print Receipt</button>
+    </div>
+  </div>
+
+  <div id="donationReceiptFeedback" class="page-feedback hidden"></div>
+
+  <div id="donationReceiptCard" class="invoice-card">
+    <p data-ui-icon="receipt-text">Loading donation receipt...</p>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js?v=20260304donate1"></script>
+<script src="auth-service.js?v=20260304donate1"></script>
+<script src="firebase-auth-helpers.js?v=20260304donate1"></script>
+<script src="firebase-db.js?v=20260304donate1"></script>
+<script src="donation-receipt.js?v=20260304donate1"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="icons.js?v=20260304icons1"></script>
+</body>
+</html>

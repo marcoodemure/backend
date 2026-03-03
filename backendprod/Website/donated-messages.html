@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Donor Messages</title>
+<link rel="stylesheet" href="style.css?v=20260304donate1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="donor-page">
+  <div class="invoice-topbar donate-topbar">
+    <a href="donate.html" class="invoice-back" data-ui-icon="arrow-left">Back to Donate</a>
+    <div class="invoice-actions">
+      <a href="donate.html" class="invoice-back" data-ui-icon="hand-heart">Make a Donation</a>
+    </div>
+  </div>
+
+  <div class="donor-wall-card">
+    <div class="donate-head">
+      <h1 data-ui-icon="messages-square">Donor Messages Wall</h1>
+      <p>Recent supporters and kind messages from our community.</p>
+    </div>
+
+    <div id="donorWallFeedback" class="page-feedback hidden"></div>
+
+    <div class="donor-metrics">
+      <div class="metric-card">
+        <small>Total Donations</small>
+        <strong id="donorMetricCount">0</strong>
+      </div>
+      <div class="metric-card">
+        <small>Total Amount</small>
+        <strong id="donorMetricAmount">PHP 0.00</strong>
+      </div>
+      <div class="metric-card">
+        <small>Latest Donor</small>
+        <strong id="donorMetricLatest">N/A</strong>
+      </div>
+    </div>
+
+    <div id="donorFeedList" class="donor-feed-list"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js?v=20260304donate1"></script>
+<script src="auth-service.js?v=20260304donate1"></script>
+<script src="firebase-auth-helpers.js?v=20260304donate1"></script>
+<script src="firebase-db.js?v=20260304donate1"></script>
+<script src="donated-messages.js?v=20260304donate1"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="icons.js?v=20260304icons1"></script>
+</body>
+</html>

@@ -669,6 +669,37 @@
     };
   }
 
+  function mapDonation(doc) {
+    const data = doc.data() || {};
+    const rawAmount = Number(data.amount);
+    const amount = Number.isFinite(rawAmount) ? Math.max(0, rawAmount) : 0;
+    const isAnonymous = Boolean(data.isAnonymous);
+    const donorName = sanitizeString(data.donorName, "");
+    const donorDisplayName = sanitizeString(
+      data.donorDisplayName,
+      isAnonymous ? "Anonymous" : (donorName || "Anonymous")
+    );
+
+    return {
+      id: doc.id,
+      paymentSessionId: sanitizeString(data.paymentSessionId, doc.id),
+      uid: sanitizeString(data.uid, ""),
+      email: sanitizeString(data.email, ""),
+      donorName,
+      donorDisplayName,
+      isAnonymous,
+      amount,
+      currency: sanitizeString(data.currency, "PHP"),
+      message: sanitizeString(data.message, ""),
+      status: sanitizeMethod(data.status, "completed"),
+      source: sanitizeString(data.source, ""),
+      paymentMethod: sanitizeMethod(data.paymentMethod, "gcash"),
+      createdAt: normalizeDateValue(data.createdAt),
+      updatedAt: normalizeDateValue(data.updatedAt),
+      paidAt: normalizeDateValue(data.paidAt)
+    };
+  }
+
   async function queueEmail(payload) {
     const db = getDbInstance();
     if (!db) {
@@ -1837,6 +1868,167 @@
 
     const snapshot = await sessionRef.get();
     return snapshot.exists ? mapPaymentSession(snapshot) : null;
+  }
+
+  async function recordDonation(payload) {
+    const db = getDbInstance();
+    if (!db) {
+      return null;
+    }
+
+    const sessionId = sanitizeString(payload?.sessionId || payload?.paymentSessionId, "");
+    if (!sessionId) {
+      const missingErr = new Error("donation_session_required");
+      missingErr.code = "donation_session_required";
+      throw missingErr;
+    }
+
+    const amountRaw = Number(payload?.amount);
+    const amount = Number.isFinite(amountRaw) ? Math.max(0, Number(amountRaw.toFixed(2))) : 0;
+    if (!amount) {
+      const invalidErr = new Error("donation_amount_invalid");
+      invalidErr.code = "donation_amount_invalid";
+      throw invalidErr;
+    }
+
+    const isAnonymous = Boolean(payload?.isAnonymous);
+    const donorName = sanitizeString(payload?.donorName, "").slice(0, 80) || "Anonymous";
+    const message = sanitizeString(payload?.message, "").slice(0, 500);
+    const currency = sanitizeString(payload?.currency, "PHP").toUpperCase().slice(0, 8) || "PHP";
+    const uid = sanitizeString(payload?.uid, "");
+    const email = sanitizeString(payload?.email, "");
+    const source = sanitizeString(payload?.source, "donate_page").slice(0, 40);
+    const paymentMethod = sanitizeMethod(payload?.paymentMethod, "gcash");
+    const donorDisplayName = isAnonymous ? "Anonymous" : donorName;
+    const donationRef = db.collection("donations").doc(sessionId);
+
+    const existing = await donationRef.get();
+    if (existing.exists) {
+      return mapDonation(existing);
+    }
+
+    await donationRef.set({
+      paymentSessionId: sessionId,
+      uid,
+      email,
+      donorName,
+      donorDisplayName,
+      isAnonymous,
+      amount,
+      currency,
+      message,
+      status: "completed",
+      source,
+      paymentMethod,
+      paidAt: getServerTimestamp(),
+      createdAt: getServerTimestamp(),
+      updatedAt: getServerTimestamp()
+    });
+
+    const snapshot = await donationRef.get();
+    const donation = snapshot.exists ? mapDonation(snapshot) : null;
+    if (!donation) {
+      return null;
+    }
+
+    if (uid || email) {
+      await queueNotification({
+        uid,
+        email,
+        type: "donation_received",
+        title: "Donation successful",
+        message: `Thank you for donating ${currency} ${amount.toFixed(2)}.`,
+        data: {
+          donationId: donation.id,
+          amount,
+          currency
+        }
+      }).catch((error) => {
+        console.error("Failed to queue donation notification", error);
+      });
+    }
+
+    if (uid) {
+      await logOrderAudit({
+        orderId: donation.id,
+        orderUid: uid,
+        eventType: "donation_completed",
+        previousStatus: "",
+        nextStatus: "completed",
+        actorUid: uid,
+        actorEmail: email,
+        actorRole: "customer",
+        source,
+        message: "Donation completed.",
+        meta: {
+          amount,
+          currency,
+          isAnonymous,
+          paymentSessionId: sessionId
+        }
+      }).catch((error) => {
+        console.error("Failed to write donation audit log", error);
+      });
+    }
+
+    return donation;
+  }
+
+  async function getDonationById(donationId) {
+    const db = getDbInstance();
+    if (!db || !donationId) {
+      return null;
+    }
+
+    const snapshot = await db.collection("donations").doc(String(donationId)).get();
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return mapDonation(snapshot);
+  }
+
+  async function listRecentDonations(limitCount = 50) {
+    const db = getDbInstance();
+    if (!db) {
+      return [];
+    }
+
+    const safeLimit = Math.max(1, Math.min(100, Number(limitCount) || 50));
+    const snapshot = await db
+      .collection("donations")
+      .orderBy("createdAt", "desc")
+      .limit(safeLimit)
+      .get();
+
+    return snapshot.docs.map(mapDonation);
+  }
+
+  function watchRecentDonations(onData, onError, limitCount = 50) {
+    const db = getDbInstance();
+    if (!db) {
+      return () => {};
+    }
+
+    const safeLimit = Math.max(1, Math.min(100, Number(limitCount) || 50));
+    return db
+      .collection("donations")
+      .orderBy("createdAt", "desc")
+      .limit(safeLimit)
+      .onSnapshot(
+        (snapshot) => {
+          if (typeof onData === "function") {
+            onData(snapshot.docs.map(mapDonation));
+          }
+        },
+        (error) => {
+          if (typeof onError === "function") {
+            onError(error);
+          } else {
+            console.error("watchRecentDonations failed", error);
+          }
+        }
+      );
   }
 
   function watchPaymentSession(sessionId, onData, onError) {
@@ -3070,6 +3262,10 @@
     markPaymentSessionPaid,
     markPaymentSessionCompleted,
     watchPaymentSession,
+    recordDonation,
+    getDonationById,
+    listRecentDonations,
+    watchRecentDonations,
     createOrder,
     getOrderById,
     listOrders,

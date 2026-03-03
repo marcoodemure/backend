@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Support Donations</title>
+<link rel="stylesheet" href="style.css?v=20260304donate1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="donate-page">
+  <div class="invoice-topbar donate-topbar">
+    <a href="orders.html" class="invoice-back" data-ui-icon="arrow-left">Back to Orders</a>
+    <div class="invoice-actions">
+      <a href="donated-messages.html" class="invoice-back" data-ui-icon="messages-square">Donor Messages</a>
+    </div>
+  </div>
+
+  <div class="donate-card">
+    <div class="donate-head">
+      <h1 data-ui-icon="hand-heart">Support Habi't Likha</h1>
+      <p>Your donation helps fund community advocacy, artist support, and outreach projects.</p>
+    </div>
+
+    <div id="donateUserStatus" class="donate-user-status"></div>
+    <div id="donateFeedback" class="page-feedback hidden"></div>
+
+    <div class="donate-form-grid">
+      <label class="donate-field">
+        <span>Donation Amount (PHP)</span>
+        <input id="donateAmountInput" class="input" type="number" min="1" max="1000000" step="1" inputmode="decimal" placeholder="Enter amount (e.g. 100)">
+      </label>
+
+      <div class="donate-quick-amounts" id="donateQuickAmounts">
+        <button type="button" class="quickActionBtn" data-amount="50" data-ui-icon="badge-plus">PHP 50</button>
+        <button type="button" class="quickActionBtn" data-amount="100" data-ui-icon="badge-plus">PHP 100</button>
+        <button type="button" class="quickActionBtn" data-amount="200" data-ui-icon="badge-plus">PHP 200</button>
+        <button type="button" class="quickActionBtn" data-amount="500" data-ui-icon="badge-plus">PHP 500</button>
+      </div>
+
+      <label class="donate-field">
+        <span>Message (Optional)</span>
+        <textarea id="donateMessageInput" class="input donate-message-input" rows="3" maxlength="500" placeholder="Share encouragement or support message (optional)"></textarea>
+        <small id="donateMessageCount" class="donate-message-count">0 / 500</small>
+      </label>
+    </div>
+
+    <button id="startDonateBtn" type="button" class="pay-btn donate-start-btn" data-ui-icon="qr-code">Donate via QR</button>
+
+    <section id="donateQrSection" class="donate-qr-section hidden">
+      <h2 data-ui-icon="scan-line">Scan to Donate</h2>
+      <p id="donateQrStatusText" class="donate-qr-status">Generating QR code...</p>
+      <img id="donateQrImage" alt="Donation QR code">
+      <div class="donate-qr-actions">
+        <a id="donateOpenScanBtn" href="#" target="_blank" rel="noopener noreferrer" data-ui-icon="external-link">Open scanner page</a>
+        <button id="donateCancelBtn" type="button" data-ui-icon="x-circle">Cancel</button>
+      </div>
+    </section>
+
+    <section id="donateSuccessCard" class="donate-success-card hidden">
+      <h2 data-ui-icon="badge-check">Donation Successful</h2>
+      <p id="donateSuccessSummary"></p>
+      <div class="donate-success-grid">
+        <div><small>Donor</small><strong id="donateSuccessDonor">N/A</strong></div>
+        <div><small>Amount</small><strong id="donateSuccessAmount">PHP 0.00</strong></div>
+        <div><small>Status</small><strong id="donateSuccessStatus">Completed</strong></div>
+        <div><small>Date</small><strong id="donateSuccessDate">N/A</strong></div>
+      </div>
+      <a id="viewDonationReceiptBtn" href="#" class="order-history-btn" target="_blank" rel="noopener noreferrer" data-ui-icon="receipt-text">View Receipt</a>
+    </section>
+  </div>
+</div>
+
+<div id="donateChoiceModal" class="return-modal hidden" role="dialog" aria-modal="true" aria-labelledby="donateChoiceTitle">
+  <div class="return-modal-card donate-choice-modal-card">
+    <div class="return-modal-head">
+      <h3 id="donateChoiceTitle" data-ui-icon="heart">Before You Continue</h3>
+      <button id="donateChoiceCloseBtn" type="button" data-ui-icon="x-circle">Close</button>
+    </div>
+
+    <p>Would you like to sign in first, or donate without an account?</p>
+    <div class="donate-choice-actions" id="donateChoiceActions">
+      <button id="donateChoiceSigninBtn" type="button" data-ui-icon="log-in">Sign In</button>
+      <button id="donateChoiceGuestBtn" type="button" data-ui-icon="user-round">Donate Without Account</button>
+    </div>
+
+    <div id="donateGuestForm" class="donate-guest-form hidden">
+      <label class="donate-field">
+        <span>Display Name</span>
+        <input id="donateGuestNameInput" class="input" type="text" maxlength="80" placeholder="Enter your name">
+      </label>
+      <label class="checkbox">
+        <input id="donateGuestAnonymousCheckbox" type="checkbox">
+        Donate anonymously
+      </label>
+      <p id="donateGuestError" class="donate-guest-error hidden"></p>
+      <div class="donate-choice-actions">
+        <button id="donateGuestBackBtn" type="button" data-ui-icon="arrow-left">Back</button>
+        <button id="donateGuestContinueBtn" type="button" class="pay-btn" data-ui-icon="qr-code">Continue to QR</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js?v=20260304donate1"></script>
+<script src="auth-service.js?v=20260304donate1"></script>
+<script src="firebase-auth-helpers.js?v=20260304donate1"></script>
+<script src="firebase-db.js?v=20260304donate1"></script>
+<script src="donate.js?v=20260304donate1"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="icons.js?v=20260304icons1"></script>
+</body>
+</html>
