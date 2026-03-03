@@ -14,7 +14,7 @@
 
 <div class="orders-header">
   <div class="orders-title">
-    <h1>Customer Profile</h1>
+    <h1 data-ui-icon="user-round">Customer Profile</h1>
   </div>
   <div class="user-panel" id="profileUserPanel"></div>
 </div>
@@ -34,15 +34,15 @@
       <input id="profileAddress2" type="text" placeholder="Address line 2 (optional)">
       <div class="address-map-card profile-map-card">
         <div class="address-map-head">
-          <h3>Map Address Picker</h3>
-          <button id="profileLocateBtn" type="button">Locate Typed Address</button>
+          <h3 data-ui-icon="map-pinned">Map Address Picker</h3>
+          <button id="profileLocateBtn" type="button" data-ui-icon="locate-fixed">Locate Typed Address</button>
         </div>
         <p id="profileMapHint" class="address-map-hint">Click map to set address fields.</p>
         <div id="profileMapPreview" class="address-map-preview"></div>
       </div>
       <div class="admin-form-actions">
-        <button id="saveProfileBtn" type="submit">Save Profile</button>
-        <a href="cart.html" class="cartBtn">Go to Cart</a>
+        <button id="saveProfileBtn" type="submit" data-ui-icon="save">Save Profile</button>
+        <a href="cart.html" class="cartBtn" data-ui-icon="shopping-cart">Go to Cart</a>
       </div>
     </form>
   </div>

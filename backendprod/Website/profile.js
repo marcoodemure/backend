@@ -170,11 +170,36 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
+    const streetStyle = {
+      version: 8,
+      sources: {
+        osm: {
+          type: "raster",
+          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: "&copy; OpenStreetMap contributors"
+        }
+      },
+      layers: [
+        {
+          id: "osm-tiles",
+          type: "raster",
+          source: "osm",
+          minzoom: 0,
+          maxzoom: 19
+        }
+      ]
+    };
+
     profileMap = new window.maplibregl.Map({
       container: "profileMapPreview",
-      style: "https://demotiles.maplibre.org/style.json",
+      style: streetStyle,
       center: [125.1716, 6.1164],
-      zoom: 11
+      zoom: 13
+    });
+
+    profileMap.on("error", () => {
+      setMapHint("Map tiles failed to load. You can still save address fields manually.", "error");
     });
 
     profileMap.addControl(new window.maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
@@ -184,7 +209,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       applyAddressFromPoint(lng, lat).catch((error) => console.error("Failed to apply map click address", error));
     });
 
-    setMapHint("Click map to set your saved address.", "info");
+    setMapHint("Manual address is allowed. You can click map to refine your saved location.", "info");
   }
 
   if (!auth || !appDb || !auth.isConfigured() || !appDb.isConfigured()) {

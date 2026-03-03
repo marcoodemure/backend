@@ -16,18 +16,18 @@
 
 <div class="admin-page" id="adminPage">
   <div class="admin-header">
-    <h1>Admin Sign In</h1>
+    <h1 data-ui-icon="shield-check">Admin Sign In</h1>
   </div>
 
   <div id="adminLoginWall" class="admin-login-wall">
     <div class="admin-login-card">
-      <h2>Admin Sign In</h2>
+      <h2 data-ui-icon="log-in">Admin Sign In</h2>
       <p>Enter credentials to access the dashboard.</p>
 
       <form id="adminLoginForm" class="admin-login-form" autocomplete="off">
         <input id="adminEmailInput" type="email" placeholder="Admin email (username)" required>
         <input id="adminPasswordInput" type="password" placeholder="Password" required>
-        <button id="adminLoginBtn" type="submit">Sign In</button>
+        <button id="adminLoginBtn" type="submit" data-ui-icon="log-in">Sign In</button>
       </form>
 
       <p id="adminLoginError" class="admin-login-error hidden"></p>

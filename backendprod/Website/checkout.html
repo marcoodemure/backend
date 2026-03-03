@@ -20,16 +20,16 @@
   <div class="left">
     <div class="section checkout-progress-wrap" aria-label="Checkout progress">
       <div id="checkoutProgress" class="checkout-progress" role="list">
-        <div class="checkout-progress-step is-active" data-step="contact" role="listitem">Contact</div>
-        <div class="checkout-progress-step" data-step="address" role="listitem">Address</div>
-        <div class="checkout-progress-step" data-step="pin" role="listitem">Pin Confirmed</div>
-        <div class="checkout-progress-step" data-step="payment" role="listitem">Payment</div>
+        <div class="checkout-progress-step is-active" data-step="contact" role="listitem" data-ui-icon="mail">Contact</div>
+        <div class="checkout-progress-step" data-step="address" role="listitem" data-ui-icon="map-pinned">Address</div>
+        <div class="checkout-progress-step" data-step="pin" role="listitem" data-ui-icon="check-circle">Pin Confirmed</div>
+        <div class="checkout-progress-step" data-step="payment" role="listitem" data-ui-icon="credit-card">Payment</div>
       </div>
     </div>
 
     <div class="section checkout-panel contact-panel">
       <div class="header-row">
-        <h2 class="section-title"><span class="title-icon" aria-hidden="true">C</span>Contact</h2>
+        <h2 class="section-title" data-ui-icon="mail">Contact</h2>
         <div id="userStatus" class="user-status"></div>
       </div>
       <p class="section-subtitle">We will send your receipt and delivery updates to this email.</p>
@@ -43,12 +43,12 @@
     </div>
 
     <div class="section checkout-panel delivery-panel">
-      <h2 class="section-title"><span class="title-icon" aria-hidden="true">D</span>Delivery</h2>
+      <h2 class="section-title" data-ui-icon="truck">Delivery</h2>
       <p class="section-subtitle">Choose delivery or pickup, then complete only the details for that option.</p>
 
       <div class="toggle">
-        <button id="shipBtn" class="active" type="button">Ship</button>
-        <button id="pickupBtn" type="button">Pickup</button>
+        <button id="shipBtn" class="active" type="button" data-ui-icon="truck">Ship</button>
+        <button id="pickupBtn" type="button" data-ui-icon="store">Pickup</button>
       </div>
 
       <div id="shippingSection">
@@ -89,11 +89,11 @@
         <div class="address-map-card">
           <p class="form-group-title">Pin Exact Delivery Location</p>
           <div class="address-map-head">
-            <h3 class="section-title-sm"><span class="title-icon-sm" aria-hidden="true">M</span>Address Preview</h3>
+            <h3 class="section-title-sm" data-ui-icon="map-pinned">Address Preview</h3>
             <div class="address-map-actions">
-              <button id="locateAddressBtn" type="button" aria-label="Locate typed address on map">Locate Typed Address</button>
-              <button id="useCurrentLocationBtn" type="button" aria-label="Use current browser location">Use my current location</button>
-              <button id="confirmPinBtn" type="button" aria-label="Confirm delivery pin">Confirm this pin</button>
+              <button id="locateAddressBtn" type="button" aria-label="Locate typed address on map" data-ui-icon="search">Locate Typed Address</button>
+              <button id="useCurrentLocationBtn" type="button" aria-label="Use current browser location" data-ui-icon="locate-fixed">Use my current location</button>
+              <button id="confirmPinBtn" type="button" aria-label="Confirm delivery pin" data-ui-icon="check-circle">Confirm this pin</button>
             </div>
           </div>
           <p id="addressMapHint" class="address-map-hint">Click the map to pick your location.</p>
@@ -105,7 +105,7 @@
             <label for="addressCandidatesSelect">Possible matches</label>
             <div class="address-candidates-row">
               <select id="addressCandidatesSelect"></select>
-              <button id="useSelectedCandidateBtn" type="button">Use selected</button>
+              <button id="useSelectedCandidateBtn" type="button" data-ui-icon="check">Use selected</button>
             </div>
           </div>
           <div id="addressMapPreview" class="address-map-preview"></div>
@@ -114,7 +114,7 @@
             <p>Courier pinpoint preview</p>
             <small class="pin-map-help-text">Helps couriers find your exact delivery location.</small>
             <iframe id="pinMapPreviewFrame" title="Pinned delivery location map preview" loading="lazy"></iframe>
-            <a id="pinMapPreviewLink" href="#" target="_blank" rel="noopener noreferrer">
+            <a id="pinMapPreviewLink" href="#" target="_blank" rel="noopener noreferrer" data-ui-icon="external-link">
               Open full map
             </a>
             <small id="pinMapPreviewStatus" class="pin-map-preview-status hidden"></small>
@@ -122,7 +122,7 @@
         </div>
 
         <div class="shipping-method">
-          <h3 class="section-title-sm"><span class="title-icon-sm" aria-hidden="true">S</span>Shipping method</h3>
+          <h3 class="section-title-sm" data-ui-icon="package-check">Shipping method</h3>
 
           <div class="method-card">
             <input type="radio" name="shipping" id="standard_shipping" checked>
@@ -144,7 +144,7 @@
         </div>
 
         <div class="payment-method">
-          <h3 class="section-title-sm"><span class="title-icon-sm" aria-hidden="true">P</span>Payment method</h3>
+          <h3 class="section-title-sm" data-ui-icon="credit-card">Payment method</h3>
 
           <div class="method-card">
             <input type="radio" name="payment" id="cash_on_delivery" checked>
@@ -169,7 +169,7 @@
           <span class="icon">i</span>
           <div>
             <strong>Pickup is available from Notre Dame of Dadiangas University (NDDU)</strong><br />
-            <a href="#" id="shipToAddressLink">Ship to address instead</a>
+            <a href="#" id="shipToAddressLink" data-ui-icon="truck">Ship to address instead</a>
           </div>
         </div>
 
@@ -207,31 +207,31 @@
       </div>
 
     <div class="section checkout-panel notes-panel">
-      <h2 class="section-title"><span class="title-icon" aria-hidden="true">N</span>Order Notes</h2>
+      <h2 class="section-title" data-ui-icon="notebook-pen">Order Notes</h2>
       <p class="section-subtitle">Optional: add landmarks, gate instructions, or preferred contact notes.</p>
       <textarea class="input checkout-notes" id="orderNotesInput" rows="4" placeholder="Add delivery instructions or special notes (optional)"></textarea>
     </div>
 
     <div id="checkoutFeedback" class="checkout-feedback hidden" role="status" aria-live="polite"></div>
-    <button class="pay-btn" type="button">Pay now</button>
+    <button class="pay-btn" type="button" data-ui-icon="credit-card">Pay now</button>
     <div id="pinSuccessMark" class="pin-success-mark hidden" aria-hidden="true">Pin saved</div>
 
     <div id="orderComplete" class="order-complete hidden">
-      <h3>Order complete</h3>
+      <h3 data-ui-icon="check-circle">Order complete</h3>
       <p id="orderCompleteText">Your order has been placed.</p>
       <p id="pickupCompleteInfo" class="pickup-complete-info hidden"></p>
       <div id="pickupClaimWrap" class="pickup-claim-wrap hidden">
         <p class="pickup-claim-title">Pickup claim QR</p>
         <img id="pickupClaimQrImage" alt="Pickup claim QR code" />
       </div>
-      <a id="checkoutNextBtn" href="#" class="order-history-btn hidden">Checkout next item</a>
-      <a href="orders.html" class="order-history-btn">Order history</a>
+      <a id="checkoutNextBtn" href="#" class="order-history-btn hidden" data-ui-icon="arrow-right">Checkout next item</a>
+      <a href="orders.html" class="order-history-btn" data-ui-icon="package">Order history</a>
     </div>
   </div>
 
   <div class="right">
     <div class="checkout-side-head">
-      <h2 class="section-title"><span class="title-icon" aria-hidden="true">O</span>Order Summary</h2>
+      <h2 class="section-title" data-ui-icon="chart-no-axes-column">Order Summary</h2>
       <p>Review items, quantity, payment, and total before placing your order.</p>
     </div>
     <div id="cartSummary"></div>
@@ -241,25 +241,25 @@
 
 <div id="authPrompt" class="auth-prompt hidden">
   <div class="auth-prompt-card">
-    <h3>Sign in or create account</h3>
+    <h3 data-ui-icon="user-round">Sign in or create account</h3>
     <p>Continue to your account to complete this order.</p>
     <div class="auth-prompt-actions">
-      <a id="authSigninLink" href="login.html">Sign in</a>
-      <a id="authCreateLink" href="create-account.html">Create account</a>
-      <button id="authCancelBtn" type="button">Cancel</button>
+      <a id="authSigninLink" href="login.html" data-ui-icon="log-in">Sign in</a>
+      <a id="authCreateLink" href="create-account.html" data-ui-icon="user-plus">Create account</a>
+      <button id="authCancelBtn" type="button" data-ui-icon="x-circle">Cancel</button>
     </div>
   </div>
 </div>
 
 <div id="qrPaymentModal" class="qr-payment-modal hidden">
   <div class="qr-payment-card">
-    <h3>Mock QR Payment</h3>
+    <h3 data-ui-icon="scan-line">Mock QR Payment</h3>
     <p>Scan this QR code on another device to complete payment.</p>
     <img id="qrPaymentImage" alt="Mock payment QR code" />
     <p id="qrPaymentStatus" class="qr-payment-status">Waiting for scan...</p>
     <div class="qr-payment-actions">
-      <a id="qrPaymentOpenScanBtn" href="#" target="_blank" rel="noopener noreferrer">Open scanner page</a>
-      <button id="qrPaymentCancelBtn" type="button">Cancel</button>
+      <a id="qrPaymentOpenScanBtn" href="#" target="_blank" rel="noopener noreferrer" data-ui-icon="external-link">Open scanner page</a>
+      <button id="qrPaymentCancelBtn" type="button" data-ui-icon="x-circle">Cancel</button>
     </div>
   </div>
 </div>

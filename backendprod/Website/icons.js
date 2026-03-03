@@ -51,6 +51,20 @@
       .with-icon > .ui-icon,
       .with-icon > svg.lucide.ui-icon {
         margin-top: -0.01em;
+        margin-right: 0.42em;
+      }
+
+      a.with-icon > .ui-icon,
+      button.with-icon > .ui-icon,
+      [role="button"].with-icon > .ui-icon,
+      a.with-icon > svg.lucide.ui-icon,
+      button.with-icon > svg.lucide.ui-icon,
+      [role="button"].with-icon > svg.lucide.ui-icon,
+      .with-icon-heading > .ui-icon,
+      .with-icon-heading > svg.lucide.ui-icon,
+      .with-icon[${ICON_BLOCK}="1"] > .ui-icon,
+      .with-icon[${ICON_BLOCK}="1"] > svg.lucide.ui-icon {
+        margin-right: 0;
       }
 
       .with-icon[disabled] .ui-icon,
@@ -70,6 +84,12 @@
   function hasIconAlready(el) {
     if (!el) return true;
     return Boolean(el.querySelector(":scope > [data-lucide], :scope > svg.lucide, :scope > .ui-icon"));
+  }
+
+  function getExplicitIconName(el) {
+    const name = String(el?.getAttribute("data-ui-icon") || "").trim().toLowerCase();
+    if (!name) return "";
+    return name;
   }
 
   function hasCustomHeadingBadge(el) {
@@ -142,6 +162,12 @@
     if (text.includes("invoice")) return "receipt-text";
     if (text.includes("return")) return "rotate-ccw";
     if (text.includes("notification")) return "bell";
+    if (text.includes("overview")) return "layout-dashboard";
+    if (text.includes("products")) return "boxes";
+    if (text.includes("returns")) return "rotate-ccw";
+    if (text.includes("metrics")) return "bar-chart-3";
+    if (text.includes("analytics")) return "line-chart";
+    if (text.includes("audit")) return "clipboard-list";
     if (text.includes("admin")) return "shield-check";
     if (text.includes("mark all") && text.includes("read")) return "check-check";
     if (text.includes("home")) return "house";
@@ -201,15 +227,15 @@
     document.querySelectorAll(HEADING_SELECTORS).forEach((el) => {
       if (!el || el.hasAttribute(ICON_SKIP) || el.closest(`[${ICON_SKIP}]`)) return;
       if (hasCustomHeadingBadge(el)) return;
-      const icon = pickIconForHeading(getText(el));
+      const icon = getExplicitIconName(el) || pickIconForHeading(getText(el));
       if (!icon) return;
       prependIcon(el, icon, true);
     });
   }
 
   function applyActionIcons() {
-    document.querySelectorAll("a, button").forEach((el) => {
-      const icon = pickIconForAction(el);
+    document.querySelectorAll("a, button, label.file-import-btn, [data-ui-icon]").forEach((el) => {
+      const icon = getExplicitIconName(el) || pickIconForAction(el);
       if (!icon) return;
       prependIcon(el, icon, false);
     });

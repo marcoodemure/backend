@@ -13,17 +13,17 @@
 
 <div class="invoice-page">
   <div class="invoice-topbar">
-    <a href="orders.html" class="invoice-back">Back to Orders</a>
+    <a href="orders.html" class="invoice-back" data-ui-icon="arrow-left">Back to Orders</a>
     <div class="invoice-actions">
-      <button id="downloadPdfBtn" type="button">Download PDF</button>
-      <button id="printInvoiceBtn" type="button">Print Invoice</button>
+      <button id="downloadPdfBtn" type="button" data-ui-icon="download">Download PDF</button>
+      <button id="printInvoiceBtn" type="button" data-ui-icon="printer">Print Invoice</button>
     </div>
   </div>
 
   <div id="invoiceFeedback" class="page-feedback hidden"></div>
 
   <div id="invoiceCard" class="invoice-card">
-    <p>Loading invoice...</p>
+    <p data-ui-icon="receipt-text">Loading invoice...</p>
   </div>
 </div>
 

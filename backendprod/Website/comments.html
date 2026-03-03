@@ -316,7 +316,7 @@
 
 <div class="comments-shell">
   <div class="comments-head">
-    <h1>Product Comments</h1>
+    <h1 data-ui-icon="messages-square">Product Comments</h1>
     <p id="commentsProductLabel">Product #</p>
   </div>
 
@@ -324,22 +324,22 @@
 
   <div class="comments-meta">
     <div class="comments-meta-card">
-      <span class="comments-meta-label">Average Rating</span>
+      <span class="comments-meta-label" data-ui-icon="star">Average Rating</span>
       <span id="commentsAvgRating" class="comments-meta-value">0.0</span>
     </div>
     <div class="comments-meta-card">
-      <span class="comments-meta-label">Total Comments</span>
+      <span class="comments-meta-label" data-ui-icon="message-square">Total Comments</span>
       <span id="commentsCount" class="comments-meta-value">0</span>
     </div>
     <div class="comments-meta-card">
-      <span class="comments-meta-label">Account</span>
+      <span class="comments-meta-label" data-ui-icon="user-round">Account</span>
       <div id="commentsUserPanel" class="comments-user-panel"></div>
     </div>
   </div>
 
   <section class="comments-compose">
     <div class="comments-compose-head">
-      <h2 class="comments-compose-title">Leave a comment</h2>
+      <h2 class="comments-compose-title" data-ui-icon="notebook-pen">Leave a comment</h2>
       <p id="commentsComposeHint" class="comments-compose-hint">Sign in to comment.</p>
     </div>
 
@@ -354,13 +354,13 @@
     <textarea id="commentInput" class="comments-textarea" maxlength="800" placeholder="Share your product experience..."></textarea>
 
     <div class="comments-actions">
-      <button id="sendCommentBtn" class="comments-send-btn" type="button">Send Comment</button>
+      <button id="sendCommentBtn" class="comments-send-btn" type="button" data-ui-icon="send">Send Comment</button>
       <span id="commentsCharCount" class="comments-char-count">0 / 800</span>
     </div>
   </section>
 
   <section class="comments-list-wrap">
-    <h2 class="comments-list-title">Latest comments</h2>
+    <h2 class="comments-list-title" data-ui-icon="messages-square">Latest comments</h2>
     <div id="commentsState" class="comments-state is-info">Loading comments...</div>
     <div id="commentsList" class="comments-list hidden"></div>
   </section>

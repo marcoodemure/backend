@@ -153,20 +153,20 @@
 
 <div class="cart-page">
   <div class="cart-header">
-    <h1>Your Cart</h1>
+    <h1 data-ui-icon="shopping-cart">Your Cart</h1>
     <div id="cartUserPanel" class="user-panel"></div>
   </div>
 
   <div id="cartFeedback" class="page-feedback hidden"></div>
 
   <div id="cartToolbar" class="cart-toolbar hidden">
-    <label class="cart-select-all">
+    <label class="cart-select-all" data-ui-icon="check">
       <input id="cartSelectAll" type="checkbox">
       Select all
     </label>
     <div class="cart-toolbar-actions">
-      <button id="cartCheckoutSelectedBtn" type="button">Checkout selected</button>
-      <button id="cartRemoveSelectedBtn" type="button" class="danger">Remove selected</button>
+      <button id="cartCheckoutSelectedBtn" type="button" data-ui-icon="badge-check">Checkout selected</button>
+      <button id="cartRemoveSelectedBtn" type="button" class="danger" data-ui-icon="trash-2">Remove selected</button>
     </div>
   </div>
 
