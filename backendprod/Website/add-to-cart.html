@@ -8,20 +8,113 @@
   html, body {
     margin: 0;
     padding: 0;
-    background: #ffffff;
-    color: #111111;
+    min-height: 100%;
+    background: #f8fafc;
+    color: #0f172a;
     font-family: "Inter", Arial, sans-serif;
   }
 
-  #addCartStatus {
-    padding: 16px;
-    font-size: 14px;
+  body {
+    display: grid;
+    place-items: center;
+    padding: clamp(12px, 3vw, 26px);
+    box-sizing: border-box;
+  }
+
+  .status-shell {
+    width: min(100%, 620px);
+  }
+
+  .status-card {
+    background: #ffffff;
+    border: 1px solid #dbe3ef;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    padding: clamp(16px, 3vw, 24px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .status-card.is-error {
+    border-color: #fecaca;
+    background: #fff8f8;
+  }
+
+  .status-card.is-info {
+    border-color: #bfdbfe;
+    background: #f8fbff;
+  }
+
+  .status-main {
+    margin: 0;
+    font-size: clamp(14px, 2.2vw, 17px);
+    font-weight: 700;
     line-height: 1.4;
+  }
+
+  .status-sub {
+    margin: 0;
+    font-size: clamp(12px, 1.8vw, 14px);
+    line-height: 1.45;
+    color: #475569;
+  }
+
+  .status-sub.hidden {
+    display: none;
+  }
+
+  .status-spinner {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    border: 2px solid #bfdbfe;
+    border-top-color: #2563eb;
+    animation: spin 0.9s linear infinite;
+  }
+
+  .status-spinner.hidden {
+    display: none;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .status-shell {
+      width: min(100%, 700px);
+    }
+  }
+
+  @media (max-width: 640px) {
+    body {
+      place-items: start center;
+      padding: 10px;
+    }
+
+    .status-shell {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .status-card {
+      border-radius: 14px;
+      padding: 14px;
+    }
   }
 </style>
 </head>
 <body>
-<p id="addCartStatus">Adding item to cart...</p>
+<main class="status-shell">
+  <section id="addCartStatusCard" class="status-card is-info" aria-live="polite" role="status">
+    <div id="addCartSpinner" class="status-spinner" aria-hidden="true"></div>
+    <p id="addCartStatus" class="status-main">Adding item to cart...</p>
+    <p id="addCartSubStatus" class="status-sub hidden"></p>
+  </section>
+</main>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -33,10 +126,16 @@
 <script>
 (async function () {
   const statusEl = document.getElementById("addCartStatus");
+  const subStatusEl = document.getElementById("addCartSubStatus");
+  const statusCardEl = document.getElementById("addCartStatusCard");
+  const spinnerEl = document.getElementById("addCartSpinner");
   const params = new URLSearchParams(window.location.search);
   const auth = window.authService;
   const appDb = window.appDb;
   const notLoggedInRedirectUrl = "https://sites.google.com/view/habitlikha/home/profile";
+  const autoRetryEnabled = params.get("auto_retry") === "1" || params.get("retry") === "1";
+  const retryMax = toBoundedInt(params.get("retry_max"), 2, 0, 5);
+  const retryDelayMs = toBoundedInt(params.get("retry_delay_ms"), 900, 200, 15000);
 
   function toProductId(value) {
     const id = Number(value);
@@ -46,6 +145,40 @@
   function toQty(value) {
     const qty = Number(value);
     return Number.isFinite(qty) && qty > 0 ? Math.max(1, Math.floor(qty)) : 1;
+  }
+
+  function toBoundedInt(value, fallback, min, max) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return fallback;
+    }
+    return Math.min(max, Math.max(min, Math.floor(num)));
+  }
+
+  function setStatus(message, kind, subMessage, showSpinner) {
+    if (statusEl) {
+      statusEl.textContent = message || "";
+    }
+    if (subStatusEl) {
+      if (subMessage) {
+        subStatusEl.textContent = subMessage;
+        subStatusEl.classList.remove("hidden");
+      } else {
+        subStatusEl.textContent = "";
+        subStatusEl.classList.add("hidden");
+      }
+    }
+    if (spinnerEl) {
+      spinnerEl.classList.toggle("hidden", !showSpinner);
+    }
+    if (statusCardEl) {
+      statusCardEl.classList.remove("is-info", "is-error");
+      if (kind === "error") {
+        statusCardEl.classList.add("is-error");
+      } else {
+        statusCardEl.classList.add("is-info");
+      }
+    }
   }
 
   function normalizeNext(raw) {
@@ -91,16 +224,40 @@
 
   function classifyAddError(error) {
     const code = String(error?.code || "").toLowerCase();
-    if (code === "product_not_found" || code === "product_inactive") {
+    if (code === "product_not_found") {
       return {
-        message: "This product is unavailable.",
+        message: "Product not found.",
         redirect: false
       };
     }
-    if (code === "permission-denied" || code === "unauthenticated" || code === "auth/user-token-expired") {
+    if (code === "product_inactive") {
+      return {
+        message: "Product is inactive right now.",
+        redirect: false
+      };
+    }
+    if (code === "permission-denied") {
+      return {
+        message: "Permission denied for cart update.",
+        redirect: false
+      };
+    }
+    if (code === "unauthenticated" || code === "auth/user-token-expired") {
       return {
         message: "Session expired. Please sign in again.",
         redirect: true
+      };
+    }
+    if (code === "cart_api_missing") {
+      return {
+        message: "Cart API is unavailable on this page.",
+        redirect: false
+      };
+    }
+    if (code === "failed-precondition" || code === "out_of_stock") {
+      return {
+        message: "Cannot add this item right now. Please try again later.",
+        redirect: false
       };
     }
     return {
@@ -109,12 +266,49 @@
     };
   }
 
+  function isRetryableAddError(error) {
+    const code = String(error?.code || "").toLowerCase();
+    if (code === "unavailable" || code === "deadline-exceeded" || code === "aborted" || code === "internal" || code === "unknown" || code === "resource-exhausted" || code === "network-request-failed") {
+      return true;
+    }
+
+    const text = String(error?.message || "").toLowerCase();
+    return text.includes("timeout")
+      || text.includes("network")
+      || text.includes("failed to fetch")
+      || text.includes("temporarily");
+  }
+
+  function wait(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  async function runWithRetry(task, onRetry) {
+    let retryCount = 0;
+    while (true) {
+      try {
+        return await task();
+      } catch (error) {
+        if (!autoRetryEnabled || !isRetryableAddError(error) || retryCount >= retryMax) {
+          throw error;
+        }
+        retryCount += 1;
+        if (typeof onRetry === "function") {
+          onRetry(retryCount, retryMax, error);
+        }
+        await wait(retryDelayMs * retryCount);
+      }
+    }
+  }
+
   const productId = toProductId(params.get("product_id"));
   const qtyToAdd = toQty(params.get("qty"));
   const nextPage = normalizeNext(params.get("next"));
 
   if (!productId) {
-    window.location.replace("cart.html");
+    setStatus("Missing product reference.", "error", "Open this page with a valid product_id.", false);
     return;
   }
 
@@ -149,11 +343,22 @@
   let nextQty = qtyToAdd;
   let didPersistCart = false;
   let failureMessage = "";
+  setStatus("Adding item to cart...", "info", "", true);
   if (appDb && appDb.isConfigured() && typeof appDb.addCartItem === "function") {
     try {
-      const updatedItem = await appDb.addCartItem(user.uid, productId, qtyToAdd, {
-        contactEmail: user.email || ""
-      });
+      const updatedItem = await runWithRetry(
+        () => appDb.addCartItem(user.uid, productId, qtyToAdd, {
+          contactEmail: user.email || ""
+        }),
+        (retryCount, maxRetry) => {
+          setStatus(
+            "Adding item to cart...",
+            "info",
+            `Network issue. Retrying ${retryCount}/${maxRetry}...`,
+            true
+          );
+        }
+      );
       if (!updatedItem || !updatedItem.productId) {
         throw new Error("cart_item_not_saved");
       }
@@ -178,27 +383,44 @@
     }
   } else if (appDb && appDb.isConfigured() && typeof appDb.setCart === "function") {
     try {
-      const currentCart = await appDb.getCart(user.uid);
-      const currentQty = currentCart && Number(currentCart.productId) === productId
-        ? Math.max(1, Number(currentCart.quantity) || 1)
-        : 0;
-      nextQty = Math.max(1, currentQty + qtyToAdd);
-      await appDb.setCart(user.uid, {
-        productId,
-        quantity: nextQty,
-        contactEmail: user.email || ""
-      });
+      await runWithRetry(
+        async () => {
+          const currentCart = await appDb.getCart(user.uid);
+          const currentQty = currentCart && Number(currentCart.productId) === productId
+            ? Math.max(1, Number(currentCart.quantity) || 1)
+            : 0;
+          nextQty = Math.max(1, currentQty + qtyToAdd);
+          await appDb.setCart(user.uid, {
+            productId,
+            quantity: nextQty,
+            contactEmail: user.email || ""
+          });
+        },
+        (retryCount, maxRetry) => {
+          setStatus(
+            "Adding item to cart...",
+            "info",
+            `Network issue. Retrying ${retryCount}/${maxRetry}...`,
+            true
+          );
+        }
+      );
       didPersistCart = true;
     } catch (error) {
       console.error("add-to-cart.html: Legacy cart fallback failed", error);
-      failureMessage = "Failed to save cart. Please try again.";
+      failureMessage = classifyAddError(error).message;
     }
   } else {
     failureMessage = "Cart service is unavailable.";
   }
 
   if (!didPersistCart) {
-    statusEl.textContent = failureMessage || "Failed to save cart. Please try again.";
+    setStatus(
+      failureMessage || "Failed to save cart. Please try again.",
+      "error",
+      autoRetryEnabled ? "Auto-retry already completed. Please try again." : "",
+      false
+    );
     return;
   }
 
