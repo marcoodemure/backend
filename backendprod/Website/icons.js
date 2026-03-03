@@ -1,10 +1,13 @@
 (function () {
   const ICON_MARK = "data-ui-iconized";
   const ICON_SKIP = "data-ui-noicon";
+  const ICON_BLOCK = "data-ui-icon-block";
   const HEADING_SELECTORS = [
     "h1",
     "h2",
+    "h3",
     ".section-title",
+    ".section-title-sm",
     ".comments-list-title",
     ".comments-compose-title"
   ].join(", ");
@@ -18,16 +21,25 @@
     style.id = "uiIconsStyle";
     style.textContent = `
       .with-icon {
-        display: inline-flex;
         align-items: center;
         gap: 0.45em;
         vertical-align: middle;
       }
-      .with-icon-heading {
-        display: flex;
-        align-items: center;
-        gap: 0.45em;
+
+      a.with-icon,
+      button.with-icon,
+      [role="button"].with-icon {
+        display: inline-flex;
       }
+
+      .with-icon-heading {
+        display: inline-flex;
+      }
+
+      .with-icon[${ICON_BLOCK}="1"] {
+        display: flex;
+      }
+
       .ui-icon,
       svg.lucide.ui-icon {
         width: 1.05em;
@@ -35,10 +47,12 @@
         flex: 0 0 auto;
         stroke-width: 2;
       }
+
       .with-icon > .ui-icon,
       .with-icon > svg.lucide.ui-icon {
         margin-top: -0.01em;
       }
+
       .with-icon[disabled] .ui-icon,
       .with-icon[aria-disabled="true"] .ui-icon {
         opacity: 0.8;
@@ -48,7 +62,34 @@
   }
 
   function getText(el) {
-    return String(el?.getAttribute("aria-label") || el?.textContent || "").replace(/\s+/g, " ").trim();
+    return String(el?.getAttribute("aria-label") || el?.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function hasIconAlready(el) {
+    if (!el) return true;
+    return Boolean(el.querySelector(":scope > [data-lucide], :scope > svg.lucide, :scope > .ui-icon"));
+  }
+
+  function hasCustomHeadingBadge(el) {
+    return Boolean(el?.querySelector(":scope > .title-icon, :scope > .title-icon-sm"));
+  }
+
+  function shouldSkipAction(el, text) {
+    if (!el) return true;
+    if (el.hasAttribute(ICON_SKIP) || el.closest(`[${ICON_SKIP}]`)) return true;
+    if (el.closest("#commentsStarPicker")) return true;
+    if (el.closest(".qty-control")) return true;
+
+    const id = String(el.id || "").toLowerCase();
+    const normalizedText = String(text || "").toLowerCase();
+
+    if (id === "plusbtn" || id === "minusbtn") return true;
+    if (/^[+-]$/.test(normalizedText)) return true;
+    if (/^\d+\s*stars?$/.test(normalizedText)) return true;
+    if (normalizedText.length <= 2) return true;
+    return false;
   }
 
   function pickIconForHeading(text) {
@@ -60,21 +101,27 @@
     if (value.includes("profile")) return "user-round";
     if (value.includes("comment")) return "messages-square";
     if (value.includes("invoice")) return "receipt-text";
+    if (value.includes("contact")) return "mail";
+    if (value.includes("delivery")) return "truck";
+    if (value.includes("address")) return "map-pinned";
+    if (value.includes("shipping")) return "package-check";
+    if (value.includes("payment") || value.includes("scan")) return "scan-line";
+    if (value.includes("note")) return "notebook-pen";
+    if (value.includes("summary")) return "chart-no-axes-column";
     if (value.includes("sign in") || value.includes("login")) return "log-in";
     if (value.includes("create account")) return "user-plus";
-    if (value.includes("payment") || value.includes("scan")) return "scan-line";
     return "";
   }
 
   function pickIconForAction(el) {
     if (!el) return "";
-    if (el.hasAttribute(ICON_SKIP) || el.closest("[data-ui-noicon]")) return "";
-    if (el.closest("#commentsStarPicker")) return "";
 
     const id = String(el.id || "").toLowerCase();
     const href = String(el.getAttribute("href") || "").toLowerCase();
     const className = String(el.className || "").toLowerCase();
     const text = getText(el).toLowerCase();
+
+    if (shouldSkipAction(el, text)) return "";
 
     if (id.includes("logout") || text.includes("log out") || text.includes("sign out")) return "log-out";
     if (id.includes("signin") || href.includes("signin") || href.includes("login") || text.includes("sign in") || text === "login") return "log-in";
@@ -85,6 +132,8 @@
     if (id.includes("pay") || className.includes("pay-btn") || text.includes("pay now")) return "credit-card";
     if (id.includes("checkout") || text.includes("checkout")) return "badge-check";
     if (id.includes("remove") || text.includes("remove") || className.includes("danger") || className.includes("cancelbtn")) return "trash-2";
+    if (text.includes("cancel")) return "x-circle";
+    if (text.includes("clear")) return "eraser";
     if (id.includes("save") || text === "save" || text.includes("save ")) return "save";
     if (id.includes("copy") || text.includes("copy")) return "copy";
     if (id.includes("open") || text.includes("open")) return "external-link";
@@ -94,12 +143,39 @@
     if (text.includes("return")) return "rotate-ccw";
     if (text.includes("notification")) return "bell";
     if (text.includes("admin")) return "shield-check";
+    if (text.includes("mark all") && text.includes("read")) return "check-check";
+    if (text.includes("home")) return "house";
+    if (text.includes("advocacy")) return "megaphone";
+    if (text.includes("souvenir")) return "gift";
+    if (text.includes("shirt")) return "shirt";
+    if (text.includes("accessories")) return "watch";
+    if (text.includes("foods")) return "utensils-crossed";
+    if (text.includes("bags")) return "briefcase";
+    if (text.includes("stories")) return "book-open";
+    if (text.includes("search")) return "search";
+    if (text.includes("back")) return "arrow-left";
+    if (text.includes("next") || text.includes("continue")) return "arrow-right";
+    if (text.includes("locate")) return "map-pin";
+    if (text.includes("current location")) return "locate-fixed";
+    if (text.includes("confirm")) return "check-circle";
+    if (text.includes("send")) return "send";
     return "";
   }
 
-  function hasIconAlready(el) {
-    if (!el) return true;
-    return Boolean(el.querySelector(":scope > [data-lucide], :scope > svg.lucide"));
+  function markBlockIfNeeded(el, iconName) {
+    if (!el) return;
+    const id = String(el.id || "").toLowerCase();
+    const className = String(el.className || "").toLowerCase();
+    if (
+      id === "addtocartbtn"
+      || className.includes("pay-btn")
+      || className.includes("comments-send-btn")
+      || className.includes("order-history-btn")
+      || className.includes("cartbtn")
+      || iconName === "send"
+    ) {
+      el.setAttribute(ICON_BLOCK, "1");
+    }
   }
 
   function prependIcon(el, iconName, isHeading) {
@@ -113,14 +189,18 @@
 
     el.prepend(iconNode);
     el.classList.add("with-icon");
+
     if (isHeading) {
       el.classList.add("with-icon-heading");
+    } else {
+      markBlockIfNeeded(el, iconName);
     }
   }
 
   function applyHeadingIcons() {
     document.querySelectorAll(HEADING_SELECTORS).forEach((el) => {
-      if (!el || el.hasAttribute(ICON_SKIP) || el.closest("[data-ui-noicon]")) return;
+      if (!el || el.hasAttribute(ICON_SKIP) || el.closest(`[${ICON_SKIP}]`)) return;
+      if (hasCustomHeadingBadge(el)) return;
       const icon = pickIconForHeading(getText(el));
       if (!icon) return;
       prependIcon(el, icon, true);
