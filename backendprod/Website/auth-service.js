@@ -290,15 +290,16 @@
         () => finish(toUserSnapshot(auth.currentUser))
       );
       timer = setTimeout(() => {
-        finish(toUserSnapshot(auth.currentUser) || readStoredUser());
+        finish(toUserSnapshot(auth.currentUser));
       }, ms);
     });
   }
 
   /**
    * Synchronously get the current user snapshot.  It prefers the live
-   * firebaseAuth.currentUser, then our cached value, then the stored user in
-   * localStorage.  Does not trigger persistence initialization.
+   * firebaseAuth.currentUser, then our cached value from the auth listener.
+   * It intentionally does not read localStorage snapshots to avoid stale
+   * sessions being treated as authenticated.
    */
   function getCurrentUser() {
     const auth = getAuth();
@@ -309,11 +310,6 @@
     }
     if (cachedUser?.uid) {
       return cachedUser;
-    }
-    const stored = readStoredUser();
-    if (stored?.uid) {
-      cachedUser = stored;
-      return stored;
     }
     return null;
   }

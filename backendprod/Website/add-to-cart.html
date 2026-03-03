@@ -74,6 +74,21 @@
     } catch {}
   }
 
+  function getLiveFirebaseUser() {
+    try {
+      if (window.firebaseAuth?.currentUser?.uid) {
+        return window.firebaseAuth.currentUser;
+      }
+      if (window.firebase && typeof window.firebase.auth === "function") {
+        const authInstance = window.firebase.auth();
+        if (authInstance?.currentUser?.uid) {
+          return authInstance.currentUser;
+        }
+      }
+    } catch {}
+    return null;
+  }
+
   const productId = toProductId(params.get("product_id"));
   const qtyToAdd = toQty(params.get("qty"));
   const nextPage = normalizeNext(params.get("next"));
@@ -89,6 +104,15 @@
   }
   if (!user?.uid && auth && typeof auth.waitForAuthState === "function") {
     user = await auth.waitForAuthState(4500);
+  }
+  const liveUser = getLiveFirebaseUser();
+  if (liveUser?.uid) {
+    user = {
+      uid: liveUser.uid,
+      email: liveUser.email || user?.email || ""
+    };
+  } else {
+    user = null;
   }
 
   if (!user?.uid) {

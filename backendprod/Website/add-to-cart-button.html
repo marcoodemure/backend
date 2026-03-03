@@ -155,6 +155,21 @@
     } catch {}
   }
 
+  function getLiveFirebaseUser() {
+    try {
+      if (window.firebaseAuth?.currentUser?.uid) {
+        return window.firebaseAuth.currentUser;
+      }
+      if (window.firebase && typeof window.firebase.auth === "function") {
+        const authInstance = window.firebase.auth();
+        if (authInstance?.currentUser?.uid) {
+          return authInstance.currentUser;
+        }
+      }
+    } catch {}
+    return null;
+  }
+
   function applyButtonOptions() {
     const label = String(params.get("label") || "").trim();
     const bg = String(params.get("bg") || "").trim();
@@ -178,7 +193,14 @@
     if (!user?.uid && auth && typeof auth.waitForAuthState === "function") {
       user = await auth.waitForAuthState(4500);
     }
-    return user;
+    const liveUser = getLiveFirebaseUser();
+    if (!liveUser?.uid) {
+      return null;
+    }
+    return {
+      uid: liveUser.uid,
+      email: liveUser.email || user?.email || ""
+    };
   }
 
   function redirectIfNotLoggedIn() {
