@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Product Comments</title>
+<link rel="stylesheet" href="style.css?v=20260303responsive1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: #0f172a;
+    font-family: "Inter", Arial, sans-serif;
+  }
+
+  body {
+    padding: clamp(10px, 2.2vw, 18px);
+    box-sizing: border-box;
+  }
+
+  .comments-shell {
+    max-width: 920px;
+    margin: 0 auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    padding: clamp(12px, 2.4vw, 20px);
+    display: grid;
+    gap: 12px;
+  }
+
+  .comments-head h1 {
+    margin: 0;
+    font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+    letter-spacing: -0.02em;
+    color: #0f172a;
+  }
+
+  .comments-head p {
+    margin: 4px 0 0;
+    color: #475569;
+    font-weight: 600;
+  }
+
+  .comments-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .comments-meta-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    display: grid;
+    gap: 2px;
+  }
+
+  .comments-meta-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .comments-meta-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .comments-user-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .comments-user-email {
+    font-weight: 700;
+    color: #0f172a;
+    overflow-wrap: anywhere;
+  }
+
+  .comments-user-panel a,
+  .comments-user-panel button {
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 8px 12px;
+    background: #ffffff;
+    color: #0f172a;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .comments-compose {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 12px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .comments-compose-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .comments-compose-title {
+    margin: 0;
+    font-size: 1.02rem;
+    color: #0f172a;
+  }
+
+  .comments-compose-hint {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+  }
+
+  .star-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .star-picker button {
+    min-width: 44px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 7px 10px;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .star-picker button.active {
+    border-color: #111827;
+    background: #111827;
+    color: #ffffff;
+  }
+
+  .comments-textarea {
+    width: 100%;
+    min-height: 96px;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 10px 12px;
+    resize: vertical;
+    font: inherit;
+    box-sizing: border-box;
+  }
+
+  .comments-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .comments-send-btn {
+    border: 1px solid #111827;
+    border-radius: 10px;
+    padding: 9px 14px;
+    background: #111827;
+    color: #ffffff;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .comments-send-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .comments-char-count {
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+  }
+
+  .comments-list-wrap {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 12px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .comments-list-title {
+    margin: 0;
+    font-size: 1.02rem;
+    color: #0f172a;
+  }
+
+  .comments-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .comment-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 10px 12px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .comment-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .comment-author {
+    display: grid;
+    gap: 2px;
+  }
+
+  .comment-author strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  .comment-author small {
+    color: #6b7280;
+    font-size: 12px;
+  }
+
+  .comment-rating {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0f172a;
+    white-space: nowrap;
+  }
+
+  .comment-text {
+    margin: 0;
+    color: #1f2937;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .comments-state {
+    border: 1px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    color: #475569;
+    font-weight: 600;
+    background: #ffffff;
+  }
+
+  .comments-state.is-error {
+    border-color: #fecaca;
+    background: #fff7f7;
+    color: #991b1b;
+  }
+
+  .comments-state.is-info {
+    border-color: #bfdbfe;
+    background: #f8fbff;
+    color: #1d4ed8;
+  }
+
+  @media (max-width: 860px) {
+    .comments-meta {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    body {
+      padding: 8px;
+    }
+
+    .comments-shell {
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: none;
+    }
+
+    .comments-user-panel a,
+    .comments-user-panel button {
+      flex: 1 1 calc(50% - 4px);
+      text-align: center;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="comments-shell">
+  <div class="comments-head">
+    <h1>Product Comments</h1>
+    <p id="commentsProductLabel">Product #</p>
+  </div>
+
+  <div id="commentsFeedback" class="page-feedback hidden" role="status" aria-live="polite"></div>
+
+  <div class="comments-meta">
+    <div class="comments-meta-card">
+      <span class="comments-meta-label">Average Rating</span>
+      <span id="commentsAvgRating" class="comments-meta-value">0.0</span>
+    </div>
+    <div class="comments-meta-card">
+      <span class="comments-meta-label">Total Comments</span>
+      <span id="commentsCount" class="comments-meta-value">0</span>
+    </div>
+    <div class="comments-meta-card">
+      <span class="comments-meta-label">Account</span>
+      <div id="commentsUserPanel" class="comments-user-panel"></div>
+    </div>
+  </div>
+
+  <section class="comments-compose">
+    <div class="comments-compose-head">
+      <h2 class="comments-compose-title">Leave a comment</h2>
+      <p id="commentsComposeHint" class="comments-compose-hint">Sign in to comment.</p>
+    </div>
+
+    <div id="commentsStarPicker" class="star-picker" aria-label="Rating from 1 to 5 stars">
+      <button type="button" data-rating="1" aria-label="1 star">1 Star</button>
+      <button type="button" data-rating="2" aria-label="2 stars">2 Stars</button>
+      <button type="button" data-rating="3" aria-label="3 stars">3 Stars</button>
+      <button type="button" data-rating="4" aria-label="4 stars">4 Stars</button>
+      <button type="button" data-rating="5" aria-label="5 stars" class="active">5 Stars</button>
+    </div>
+
+    <textarea id="commentInput" class="comments-textarea" maxlength="800" placeholder="Share your product experience..."></textarea>
+
+    <div class="comments-actions">
+      <button id="sendCommentBtn" class="comments-send-btn" type="button">Send Comment</button>
+      <span id="commentsCharCount" class="comments-char-count">0 / 800</span>
+    </div>
+  </section>
+
+  <section class="comments-list-wrap">
+    <h2 class="comments-list-title">Latest comments</h2>
+    <div id="commentsState" class="comments-state is-info">Loading comments...</div>
+    <div id="commentsList" class="comments-list hidden"></div>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js?v=20260303comments1"></script>
+<script src="auth-service.js?v=20260303comments1"></script>
+<script src="firebase-auth-helpers.js?v=20260303comments1"></script>
+<script src="firebase-db.js?v=20260303comments1"></script>
+<script src="comments.js?v=20260303comments1"></script>
+
+</body>
+</html>

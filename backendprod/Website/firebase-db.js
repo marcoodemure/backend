@@ -713,6 +713,243 @@
     };
   }
 
+  function normalizeCommentRating(value) {
+    const rating = Math.round(Number(value));
+    if (!Number.isFinite(rating)) {
+      return 0;
+    }
+    return Math.max(1, Math.min(5, rating));
+  }
+
+  function sanitizeCommentText(value) {
+    if (typeof value !== "string") {
+      return "";
+    }
+    return value.replace(/\s+/g, " ").trim().slice(0, 800);
+  }
+
+  function toDisplayName(profile, email) {
+    const firstName = sanitizeString(profile?.profile?.firstName, "");
+    const lastName = sanitizeString(profile?.profile?.lastName, "");
+    const combined = `${firstName} ${lastName}`.trim();
+    if (combined) {
+      return combined.slice(0, 80);
+    }
+    const safeEmail = sanitizeString(email, "");
+    if (safeEmail.includes("@")) {
+      return safeEmail.split("@")[0].slice(0, 80);
+    }
+    return "Customer";
+  }
+
+  function mapProductComment(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      productId: normalizeProductId(data.productId),
+      uid: sanitizeString(data.uid, ""),
+      email: sanitizeString(data.email, ""),
+      displayName: sanitizeString(data.displayName, "Customer"),
+      rating: normalizeCommentRating(data.rating) || 5,
+      text: sanitizeCommentText(data.text),
+      createdAt: normalizeDateValue(data.createdAt) || "",
+      updatedAt: normalizeDateValue(data.updatedAt) || ""
+    };
+  }
+
+  async function resolveCommentProduct(productId) {
+    let product = null;
+    try {
+      product = await getProductById(productId);
+    } catch (error) {
+      console.error("Failed to resolve Firestore product for comment", error);
+    }
+
+    if (!product || normalizeProductId(product.id) !== productId) {
+      try {
+        product = await getCatalogProductById(productId);
+      } catch (error) {
+        console.error("Failed to resolve products.json fallback for comment", error);
+      }
+    }
+
+    if (!product || normalizeProductId(product.id) !== productId) {
+      const missingErr = new Error("product_not_found");
+      missingErr.code = "product_not_found";
+      throw missingErr;
+    }
+
+    if (product.isActive === false) {
+      const inactiveErr = new Error("product_inactive");
+      inactiveErr.code = "product_inactive";
+      throw inactiveErr;
+    }
+
+    return product;
+  }
+
+  async function addProductComment(uid, email, draft) {
+    const db = getDbInstance();
+    if (!db) {
+      return null;
+    }
+
+    const safeUid = sanitizeString(uid, "");
+    const safeProductId = normalizeProductId(draft?.productId);
+    const safeRating = normalizeCommentRating(draft?.rating);
+    const safeText = sanitizeCommentText(draft?.text);
+
+    if (!safeUid) {
+      const authErr = new Error("unauthenticated");
+      authErr.code = "unauthenticated";
+      throw authErr;
+    }
+    if (!safeProductId) {
+      const productErr = new Error("invalid_product_id");
+      productErr.code = "invalid_product_id";
+      throw productErr;
+    }
+    if (!safeRating) {
+      const ratingErr = new Error("invalid_rating");
+      ratingErr.code = "invalid_rating";
+      throw ratingErr;
+    }
+    if (!safeText) {
+      const textErr = new Error("empty_comment");
+      textErr.code = "empty_comment";
+      throw textErr;
+    }
+
+    await resolveCommentProduct(safeProductId);
+
+    let profile = null;
+    try {
+      profile = await getUserProfile(safeUid);
+    } catch (error) {
+      console.warn("addProductComment: failed to resolve profile display name", error);
+    }
+
+    const safeEmail = sanitizeString(email, profile?.email || "");
+    const displayName = sanitizeString(draft?.displayName, toDisplayName(profile, safeEmail));
+    const payload = {
+      productId: safeProductId,
+      uid: safeUid,
+      email: safeEmail,
+      displayName,
+      rating: safeRating,
+      text: safeText,
+      createdAt: getServerTimestamp(),
+      updatedAt: getServerTimestamp()
+    };
+
+    const commentRef = await db.collection("product_comments").add(payload);
+    const snapshot = await commentRef.get();
+    return snapshot.exists ? mapProductComment(snapshot) : null;
+  }
+
+  async function listProductComments(productId, options) {
+    const db = getDbInstance();
+    if (!db) {
+      return [];
+    }
+
+    const safeProductId = normalizeProductId(productId);
+    if (!safeProductId) {
+      return [];
+    }
+
+    const safeLimit = Math.max(1, Math.min(200, Number(options?.limitCount) || 50));
+    let snapshot = null;
+
+    try {
+      snapshot = await db.collection("product_comments")
+        .where("productId", "==", safeProductId)
+        .orderBy("createdAt", "desc")
+        .limit(safeLimit)
+        .get();
+    } catch (error) {
+      const code = String(error?.code || "").toLowerCase();
+      if (code === "failed-precondition" || code === "invalid-argument") {
+        snapshot = await db.collection("product_comments")
+          .where("productId", "==", safeProductId)
+          .limit(safeLimit)
+          .get();
+      } else {
+        throw error;
+      }
+    }
+
+    return snapshot.docs
+      .map(mapProductComment)
+      .filter((comment) => comment.productId === safeProductId)
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, safeLimit);
+  }
+
+  function watchProductComments(productId, onData, onError, limitCount) {
+    const db = getDbInstance();
+    if (!db) {
+      return () => {};
+    }
+
+    const safeProductId = normalizeProductId(productId);
+    if (!safeProductId) {
+      onData([]);
+      return () => {};
+    }
+
+    const safeLimit = Math.max(1, Math.min(200, Number(limitCount) || 50));
+    let unsubscribe = () => {};
+    let usingFallbackQuery = false;
+
+    const pushRows = (snapshot) => {
+      const rows = snapshot.docs
+        .map(mapProductComment)
+        .filter((comment) => comment.productId === safeProductId)
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, safeLimit);
+      onData(rows);
+    };
+
+    const reportError = (error) => {
+      if (typeof onError === "function") {
+        onError(error);
+      } else {
+        console.error("Product comments realtime listener failed", error);
+      }
+    };
+
+    const startFallbackStream = () => {
+      usingFallbackQuery = true;
+      unsubscribe = db.collection("product_comments")
+        .where("productId", "==", safeProductId)
+        .limit(safeLimit)
+        .onSnapshot(pushRows, reportError);
+    };
+
+    unsubscribe = db.collection("product_comments")
+      .where("productId", "==", safeProductId)
+      .orderBy("createdAt", "desc")
+      .limit(safeLimit)
+      .onSnapshot(
+        pushRows,
+        (error) => {
+          const code = String(error?.code || "").toLowerCase();
+          if (!usingFallbackQuery && (code === "failed-precondition" || code === "invalid-argument")) {
+            startFallbackStream();
+            return;
+          }
+          reportError(error);
+        }
+      );
+
+    return () => {
+      try {
+        unsubscribe();
+      } catch {}
+    };
+  }
+
   async function queueNotification(payload) {
     const db = getDbInstance();
     if (!db) {
@@ -2833,6 +3070,9 @@
     logOrderAudit,
     watchOrderAudit,
     queueNotification,
+    addProductComment,
+    listProductComments,
+    watchProductComments,
     listUserNotifications,
     watchUserNotifications,
     markNotificationRead,
