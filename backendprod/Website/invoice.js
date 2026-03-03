@@ -28,6 +28,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     return `PHP ${Number(value || 0).toFixed(2)}`;
   }
 
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatPaymentLabel(method) {
+    const raw = String(method || "cash_on_delivery").toLowerCase();
+    if (raw === "gcash") return "GCash Wallet";
+    if (raw === "cash_on_delivery") return "Cash on Delivery";
+    return raw.replace(/_/g, " ");
+  }
+
+  function formatDeliveryLabel(method) {
+    return method === "pickup" ? "Store Pickup" : "Ship to Address";
+  }
+
   function formatDateTime(value) {
     if (!value) {
       return "N/A";
@@ -40,12 +60,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     const quantity = Math.max(1, Number(order.quantity) || 1);
     const unitPrice = Number(order.unitPrice) || 0;
     const shippingFee = Number(order.shippingFee) || 0;
+    const subtotal = unitPrice * quantity;
     const totalPrice = Number(order.totalPrice) || unitPrice * quantity + shippingFee;
-    const payment = String(order.paymentMethod || "cash_on_delivery").replace(/_/g, " ");
+    const payment = formatPaymentLabel(order.paymentMethod);
     const delivery = order.deliveryMethod === "pickup" ? "pickup" : "ship";
+    const deliveryLabel = formatDeliveryLabel(delivery);
     const rawStatus = String(order.status || "pending");
     const status = rawStatus.replace(/_/g, " ");
     const statusClass = rawStatus === "in_transit" ? "status-transit" : rawStatus === "delivered" ? "status-delivered" : rawStatus === "canceled" ? "status-canceled" : "status-pending";
+    const orderIdLabel = escapeHtml(order.id || "N/A");
+    const receiptRef = `HL-${orderIdLabel}`;
+    const billTo = escapeHtml(order.contactEmail || order.email || "N/A");
+    const productLabel = escapeHtml(order.productName || `Product #${order.productId || ""}`);
     const lat = Number(order.shippingLocation?.lat);
     const lng = Number(order.shippingLocation?.lng);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
@@ -59,9 +85,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const proofMapHtml = delivery === "ship" && (hasCoords || mapLinkUrl)
       ? `
         <div class="invoice-map-proof">
-          <h3>Delivery Pin Proof</h3>
+          <h3 data-ui-icon="map-pinned">Delivery Pin Proof</h3>
           <div class="summary-line"><span>Coordinates</span><span>${hasCoords ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : "N/A"}</span></div>
-          <div class="summary-line"><span>Map link</span><span>${mapLinkUrl ? `<a href="${mapLinkUrl}" target="_blank" rel="noopener noreferrer">Open map pin</a>` : "N/A"}</span></div>
+          <div class="summary-line"><span>Map link</span><span>${mapLinkUrl ? `<a href="${mapLinkUrl}" target="_blank" rel="noopener noreferrer" data-ui-icon="external-link">Open map pin</a>` : "N/A"}</span></div>
           ${mapSnapshotUrl ? `<img src="${mapSnapshotUrl}" alt="Pinned delivery map preview" class="invoice-map-image" onerror="this.style.display='none'">` : ""}
         </div>
       `
@@ -70,37 +96,66 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pickupQrHtml = delivery === "pickup" && pickupDetails?.reference
       ? `
         <div class="invoice-map-proof">
-          <h3>Pickup Claim Proof</h3>
-          <div class="summary-line"><span>Reference</span><span>${pickupDetails.reference}</span></div>
-          <div class="summary-line"><span>Pickup schedule</span><span>${pickupDetails.pickupDate || "N/A"} ${pickupDetails.pickupTimeSlot || ""}</span></div>
+          <h3 data-ui-icon="qr-code">Pickup Claim Proof</h3>
+          <div class="summary-line"><span>Reference</span><span>${escapeHtml(pickupDetails.reference)}</span></div>
+          <div class="summary-line"><span>Pickup schedule</span><span>${escapeHtml(pickupDetails.pickupDate || "N/A")} ${escapeHtml(pickupDetails.pickupTimeSlot || "")}</span></div>
           <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`PICKUP_CLAIM|ORDER:${order.id || "N/A"}|REF:${pickupDetails.reference}`)}" alt="Pickup claim QR code" class="invoice-map-image" onerror="this.style.display='none'">
         </div>
       `
       : "";
 
     invoiceCard.innerHTML = `
-      <div class="invoice-brand">
-        <div>
-          <h1>Habit likha Store Invoice</h1>
-          <p>Order #${order.id || "N/A"}</p>
+      <div class="invoice-receipt-head">
+        <div class="invoice-branding">
+          <div class="invoice-brand-logo" aria-hidden="true">HL</div>
+          <div class="invoice-brand-copy">
+            <p class="invoice-brand-kicker">Habi't Likha e-Receipt</p>
+            <h1 data-ui-icon="receipt-text">Payment Receipt</h1>
+            <p class="invoice-receipt-ref">Reference: ${receiptRef}</p>
+          </div>
         </div>
         <span class="status-chip ${statusClass}">${status}</span>
       </div>
-      <div class="summary-line"><span>Bill To</span><span>${order.contactEmail || order.email || "N/A"}</span></div>
-      <div class="summary-line"><span>Placed</span><span>${formatDateTime(order.createdAt)}</span></div>
-      <div class="summary-line"><span>Last Updated</span><span>${formatDateTime(order.updatedAt)}</span></div>
-      <div class="summary-line"><span>Payment</span><span>${payment}</span></div>
-      <div class="summary-line"><span>Delivery</span><span>${delivery}</span></div>
+
+      <div class="invoice-amount-panel">
+        <p class="invoice-amount-label">Amount Paid</p>
+        <p class="invoice-amount-value">${formatMoney(totalPrice)}</p>
+        <div class="invoice-amount-meta">
+          <span data-ui-icon="credit-card">${escapeHtml(payment)}</span>
+          <span data-ui-icon="truck">${escapeHtml(deliveryLabel)}</span>
+        </div>
+      </div>
+
+      <div class="invoice-meta-grid">
+        <div class="invoice-meta-item">
+          <small>Order ID</small>
+          <strong>${orderIdLabel}</strong>
+        </div>
+        <div class="invoice-meta-item">
+          <small>Date Paid</small>
+          <strong>${escapeHtml(formatDateTime(order.updatedAt || order.createdAt))}</strong>
+        </div>
+        <div class="invoice-meta-item">
+          <small>Billed To</small>
+          <strong>${billTo}</strong>
+        </div>
+        <div class="invoice-meta-item">
+          <small>Placed</small>
+          <strong>${escapeHtml(formatDateTime(order.createdAt))}</strong>
+        </div>
+      </div>
 
       <div class="invoice-line-items">
-        <div class="summary-line"><strong>Item</strong><strong>Amount</strong></div>
-        <div class="summary-line"><span>${order.productName || `Product #${order.productId || ""}`} x ${quantity}</span><span>${formatMoney(unitPrice * quantity)}</span></div>
-        <div class="summary-line"><span>Shipping</span><span>${formatMoney(shippingFee)}</span></div>
+        <div class="summary-line"><strong>Details</strong><strong>Amount</strong></div>
+        <div class="summary-line"><span>${productLabel} x ${quantity}</span><span>${formatMoney(subtotal)}</span></div>
+        <div class="summary-line"><span>Unit price</span><span>${formatMoney(unitPrice)}</span></div>
+        <div class="summary-line"><span>Shipping fee</span><span>${formatMoney(shippingFee)}</span></div>
       </div>
+
       ${proofMapHtml}
       ${pickupQrHtml}
-      <div class="total"><span>Total</span><span>${formatMoney(totalPrice)}</span></div>
-      <p class="invoice-footnote">This is a mock invoice generated for demo/reporting purposes.</p>
+      <div class="total invoice-total"><span>Total paid</span><span>${formatMoney(totalPrice)}</span></div>
+      <p class="invoice-footnote">This is a system-generated e-receipt for demo/reporting use.</p>
     `;
   }
 
