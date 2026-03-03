@@ -5,7 +5,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const donateMessageInput = document.getElementById("donateMessageInput");
   const donateMessageCount = document.getElementById("donateMessageCount");
   const donateQuickAmounts = document.getElementById("donateQuickAmounts");
-  const donatePageBackBtn = document.getElementById("donatePageBackBtn");
   const startDonateBtn = document.getElementById("startDonateBtn");
   const donateQrSection = document.getElementById("donateQrSection");
   const donateQrImage = document.getElementById("donateQrImage");
@@ -559,16 +558,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   hideQrSection();
   resetSuccessCard();
   setStartButtonState(false, defaultStartButtonLabel);
-
-  if (donatePageBackBtn) {
-    donatePageBackBtn.addEventListener("click", () => {
-      if (window.history.length > 1) {
-        window.history.back();
-        return;
-      }
-      window.location.href = "orders.html";
-    });
-  }
 
   if (donateQuickAmounts) {
     donateQuickAmounts.querySelectorAll("[data-amount]").forEach((button) => {
