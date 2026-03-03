@@ -32,6 +32,7 @@
       <button type="button" class="admin-tab-btn active" data-admin-tab-target="overview" aria-selected="true" data-ui-icon="layout-dashboard">Overview</button>
       <button type="button" class="admin-tab-btn" data-admin-tab-target="products" aria-selected="false" data-ui-icon="boxes">Products</button>
       <button type="button" class="admin-tab-btn" data-admin-tab-target="orders" aria-selected="false" data-ui-icon="package">Orders</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab-target="donations" aria-selected="false" data-ui-icon="hand-heart">Donations</button>
       <button type="button" class="admin-tab-btn" data-admin-tab-target="returns" aria-selected="false" data-ui-icon="rotate-ccw">Returns</button>
     </div>
 
@@ -204,6 +205,40 @@
       </section>
     </div>
 
+    <div class="admin-tab-panel" data-admin-tab-panel="donations">
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2 data-ui-icon="hand-heart">Donation Analytics</h2>
+          <span class="admin-badge">Live</span>
+        </div>
+        <div id="adminDonationMetrics" class="admin-metrics"></div>
+      </section>
+
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2 data-ui-icon="line-chart">Donation Trend</h2>
+          <span class="admin-badge">Recent</span>
+        </div>
+        <div id="adminDonationTrend" class="admin-list"></div>
+      </section>
+
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2 data-ui-icon="award">Top Donors</h2>
+          <span class="admin-badge">By Total Amount</span>
+        </div>
+        <div id="adminDonationTopDonors" class="admin-list"></div>
+      </section>
+
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2 data-ui-icon="messages-square">Recent Donation Messages</h2>
+          <span class="admin-badge">Latest Entries</span>
+        </div>
+        <div id="adminDonationRecent" class="admin-list"></div>
+      </section>
+    </div>
+
     <div class="admin-tab-panel" data-admin-tab-panel="returns">
       <section class="admin-card">
         <div class="admin-card-head">
@@ -233,7 +268,7 @@
 <script src="auth-service.js?v=20260302c"></script>
 <script src="firebase-auth-helpers.js?v=20260302c"></script>
 <script src="firebase-db.js?v=20260302e"></script>
-<script src="admin.js?v=20260302e"></script>
+<script src="admin.js?v=20260304donations1"></script>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="icons.js?v=20260304icons1"></script>
 </body>

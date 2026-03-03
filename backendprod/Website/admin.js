@@ -69,6 +69,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const adminConversionFunnel = document.getElementById("adminConversionFunnel");
   const adminDailySalesChart = document.getElementById("adminDailySalesChart");
   const exportDailySalesCsvBtn = document.getElementById("exportDailySalesCsvBtn");
+  const adminDonationMetrics = document.getElementById("adminDonationMetrics");
+  const adminDonationTrend = document.getElementById("adminDonationTrend");
+  const adminDonationTopDonors = document.getElementById("adminDonationTopDonors");
+  const adminDonationRecent = document.getElementById("adminDonationRecent");
   const adminReturnRequests = document.getElementById("adminReturnRequests");
   const adminNotificationsList = document.getElementById("adminNotificationsList");
   const adminUnreadBadge = document.getElementById("adminUnreadBadge");
@@ -151,6 +155,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let lowStockThreshold = Math.max(1, Number(localStorage.getItem("lowStockThreshold")) || 5);
   const ORDERS_PAGE_SIZE = 8;
   const INITIAL_ORDERS_LIMIT = 80;
+  const DONATIONS_LIMIT = 200;
   const ANALYTICS_MIN_REFRESH_MS = 15000;
   const ORDERS_ENABLED = true;
   const ROLE_CACHE_KEY = "adminRoleCacheV1";
@@ -163,11 +168,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   let stopProducts = null;
   let stopOrders = null;
   let stopAudit = null;
+  let stopDonations = null;
   let stopReturns = null;
   let stopNotifications = null;
   let listenersStarted = false;
   let allReturnRequests = [];
   let allNotifications = [];
+  let allDonations = [];
   let backendAnalyticsSummary = null;
   let savingProduct = false;
   let savingOrder = false;
@@ -228,10 +235,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     return `PHP ${Number(value || 0).toFixed(2)}`;
   }
 
+  function formatMoneyWithCurrency(value, currency) {
+    const safeCurrency = String(currency || "PHP").toUpperCase();
+    return `${safeCurrency} ${Number(value || 0).toFixed(2)}`;
+  }
+
   function formatDateTime(value) {
     if (!value) return "N/A";
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
+  }
+
+  function getDonationTimestamp(entry) {
+    const dateValue = entry?.paidAt || entry?.createdAt || entry?.updatedAt || "";
+    const ts = new Date(dateValue).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  }
+
+  function formatDateOnly(value) {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? "N/A"
+      : date.toISOString().slice(0, 10);
   }
 
   function normalizeTagList(value) {
@@ -931,6 +957,166 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  function renderDonationError(message) {
+    const safeMessage = escapeHtml(message || "Failed to load donation analytics.");
+    if (adminDonationMetrics) {
+      adminDonationMetrics.innerHTML = `<p>${safeMessage}</p>`;
+    }
+    if (adminDonationTrend) {
+      adminDonationTrend.innerHTML = `<p>${safeMessage}</p>`;
+    }
+    if (adminDonationTopDonors) {
+      adminDonationTopDonors.innerHTML = `<p>${safeMessage}</p>`;
+    }
+    if (adminDonationRecent) {
+      adminDonationRecent.innerHTML = `<p>${safeMessage}</p>`;
+    }
+  }
+
+  function renderDonationAnalytics(entries) {
+    const list = Array.isArray(entries) ? entries.slice() : [];
+    list.sort((a, b) => getDonationTimestamp(b) - getDonationTimestamp(a));
+    allDonations = list;
+
+    const currency = list[0]?.currency || "PHP";
+    const totalAmount = list.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const avgAmount = list.length ? totalAmount / list.length : 0;
+    const withMessageCount = list.filter((item) => String(item.message || "").trim()).length;
+    const anonymousCount = list.filter((item) => Boolean(item.isAnonymous)).length;
+    const topDonationValue = list.reduce((max, item) => Math.max(max, Number(item.amount || 0)), 0);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayStartMs = startOfToday.getTime();
+    const todayItems = list.filter((item) => getDonationTimestamp(item) >= todayStartMs);
+    const todayAmount = todayItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    if (adminDonationMetrics) {
+      adminDonationMetrics.style.display = "grid";
+      adminDonationMetrics.style.gridTemplateColumns = "repeat(auto-fit, minmax(150px, 1fr))";
+      adminDonationMetrics.style.gap = "10px";
+      adminDonationMetrics.innerHTML = `
+        <div class="metric-card"><span class="metric-label">Donations (Loaded)</span><strong class="metric-value">${list.length}</strong></div>
+        <div class="metric-card"><span class="metric-label">Total Amount</span><strong class="metric-value">${formatMoneyWithCurrency(totalAmount, currency)}</strong></div>
+        <div class="metric-card"><span class="metric-label">Today Count</span><strong class="metric-value">${todayItems.length}</strong></div>
+        <div class="metric-card"><span class="metric-label">Today Amount</span><strong class="metric-value">${formatMoneyWithCurrency(todayAmount, currency)}</strong></div>
+        <div class="metric-card"><span class="metric-label">Average Donation</span><strong class="metric-value">${formatMoneyWithCurrency(avgAmount, currency)}</strong></div>
+        <div class="metric-card"><span class="metric-label">Highest Donation</span><strong class="metric-value">${formatMoneyWithCurrency(topDonationValue, currency)}</strong></div>
+        <div class="metric-card"><span class="metric-label">Anonymous Donors</span><strong class="metric-value">${anonymousCount}</strong></div>
+        <div class="metric-card"><span class="metric-label">With Message</span><strong class="metric-value">${withMessageCount}</strong></div>
+      `;
+    }
+
+    if (adminDonationTopDonors) {
+      if (!list.length) {
+        adminDonationTopDonors.innerHTML = "<p>No donations yet.</p>";
+      } else {
+        const donorMap = new Map();
+        list.forEach((item) => {
+          const displayName = item.isAnonymous
+            ? "Anonymous"
+            : (item.donorDisplayName || item.donorName || item.email || "Guest donor");
+          const key = item.isAnonymous
+            ? `anonymous:${displayName}`
+            : (item.uid || item.email || String(displayName).toLowerCase());
+          const current = donorMap.get(key) || {
+            name: displayName,
+            count: 0,
+            amount: 0,
+            lastAt: 0
+          };
+          current.count += 1;
+          current.amount += Number(item.amount || 0);
+          current.lastAt = Math.max(current.lastAt, getDonationTimestamp(item));
+          donorMap.set(key, current);
+        });
+
+        const topDonors = Array.from(donorMap.values())
+          .sort((a, b) => {
+            if (b.amount !== a.amount) return b.amount - a.amount;
+            if (b.count !== a.count) return b.count - a.count;
+            return b.lastAt - a.lastAt;
+          })
+          .slice(0, 8);
+
+        adminDonationTopDonors.innerHTML = topDonors.length
+          ? topDonors.map((entry) => `
+              <div class="admin-item">
+                <div class="admin-item-main">
+                  <strong>${escapeHtml(entry.name)}</strong>
+                  <span>Total: ${escapeHtml(formatMoneyWithCurrency(entry.amount, currency))}</span>
+                  <span>Donations: ${entry.count}</span>
+                </div>
+              </div>
+            `).join("")
+          : "<p>No donor analytics yet.</p>";
+      }
+    }
+
+    if (adminDonationTrend) {
+      if (!list.length) {
+        adminDonationTrend.innerHTML = "<p>No donation trend data yet.</p>";
+      } else {
+        const rowsMap = new Map();
+        list.forEach((item) => {
+          const dateKey = formatDateOnly(item.paidAt || item.createdAt);
+          const current = rowsMap.get(dateKey) || {
+            date: dateKey,
+            count: 0,
+            amount: 0
+          };
+          current.count += 1;
+          current.amount += Number(item.amount || 0);
+          rowsMap.set(dateKey, current);
+        });
+        const rows = Array.from(rowsMap.values())
+          .filter((row) => row.date !== "N/A")
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(-12);
+
+        if (!rows.length) {
+          adminDonationTrend.innerHTML = "<p>No donation trend data yet.</p>";
+        } else {
+          const maxAmount = Math.max(...rows.map((row) => row.amount), 1);
+          adminDonationTrend.innerHTML = rows.map((row) => {
+            const width = Math.max(5, Math.round((row.amount / maxAmount) * 100));
+            return `
+              <div class="sales-bar-row">
+                <span>${escapeHtml(row.date)}</span>
+                <div class="sales-bar"><i style="width:${width}%"></i></div>
+                <strong>${escapeHtml(formatMoneyWithCurrency(row.amount, currency))}</strong>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+    }
+
+    if (adminDonationRecent) {
+      if (!list.length) {
+        adminDonationRecent.innerHTML = "<p>No recent donations yet.</p>";
+      } else {
+        adminDonationRecent.innerHTML = list.slice(0, 12).map((item) => {
+          const displayName = item.isAnonymous
+            ? "Anonymous"
+            : (item.donorDisplayName || item.donorName || item.email || "Guest donor");
+          const amount = formatMoneyWithCurrency(item.amount, item.currency || currency);
+          const message = String(item.message || "").trim();
+          const dateLabel = formatDateTime(item.paidAt || item.createdAt);
+          const paymentMethod = String(item.paymentMethod || "gcash").replace(/_/g, " ");
+          return `
+            <div class="admin-item">
+              <div class="admin-item-main">
+                <strong>${escapeHtml(displayName)} - ${escapeHtml(amount)}</strong>
+                <span>${escapeHtml(dateLabel)} via ${escapeHtml(paymentMethod)}</span>
+                <span>${escapeHtml(message || "No message provided.")}</span>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+  }
+
   function renderNotifications(entries) {
     allNotifications = Array.isArray(entries) ? entries : [];
     if (!adminNotificationsList) return;
@@ -1514,6 +1700,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (stopProducts) stopProducts();
     if (stopOrders) stopOrders();
     if (stopAudit) stopAudit();
+    if (stopDonations) stopDonations();
     if (stopReturns) stopReturns();
     if (stopNotifications) stopNotifications();
     if (deferredListenersTimer) clearTimeout(deferredListenersTimer);
@@ -1521,6 +1708,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     stopProducts = null;
     stopOrders = null;
     stopAudit = null;
+    stopDonations = null;
     stopReturns = null;
     stopNotifications = null;
     deferredListenersTimer = null;
@@ -1528,6 +1716,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     analyticsRefreshInFlight = false;
     analyticsRefreshQueued = false;
     lastAnalyticsRefreshAt = 0;
+    allDonations = [];
     listenersStarted = false;
   }
 
@@ -1558,6 +1747,23 @@ document.addEventListener("DOMContentLoaded", async () => {
       );
     } else if (adminReturnRequests) {
       adminReturnRequests.innerHTML = "<p>Return request API is not available.</p>";
+    }
+
+    if (typeof appDb.watchRecentDonations === "function") {
+      stopDonations = appDb.watchRecentDonations(
+        (entries) => renderDonationAnalytics(entries),
+        (error) => {
+          console.error("Donation listener error", error);
+          const denied = String(error?.code || "") === "permission-denied";
+          const message = denied
+            ? "Permission denied loading donations. Verify Firestore rules/admin session."
+            : "Failed to load donation analytics.";
+          renderDonationError(message);
+        },
+        DONATIONS_LIMIT
+      );
+    } else {
+      renderDonationError("Donation analytics API is not available.");
     }
 
     if (user?.uid && typeof appDb.watchUserNotifications === "function") {
@@ -1732,6 +1938,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderMetrics();
     setSkeleton(adminNotificationsList, 3);
     setSkeleton(adminProductsList, 4);
+    if (adminDonationMetrics) setSkeleton(adminDonationMetrics, 4);
+    if (adminDonationTrend) setSkeleton(adminDonationTrend, 3);
+    if (adminDonationTopDonors) setSkeleton(adminDonationTopDonors, 3);
+    if (adminDonationRecent) setSkeleton(adminDonationRecent, 4);
     if (ORDERS_ENABLED) {
       setSkeleton(adminOrdersList, 4);
     } else if (adminOrdersList) {
