@@ -90,5 +90,26 @@ service cloud.firestore {
       allow read, update: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow delete: if false;
     }
+
+    match /product_comments/{commentId} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.productId is int
+        && request.resource.data.productId > 0
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 800
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 160;
+
+      allow update, delete: if false;
+    }
   }
 }
