@@ -5,6 +5,21 @@
   padding: 0;
 }
 
+/* Hide scrollbars globally while preserving scroll behavior */
+html,
+body,
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 body {
   font-family: "Inter", Arial, sans-serif;
   background: #ffffff;
@@ -2731,8 +2746,21 @@ p {
 .donate-page,
 .donor-page {
   max-width: 980px;
-  margin: 24px auto 28px;
-  padding: 0 16px 28px;
+  margin: 20px auto 28px;
+  padding: 0 16px 24px;
+}
+
+.donate-page-nav,
+.donor-page-nav {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.donate-page-nav .invoice-back,
+.donor-page-nav .invoice-back {
+  border-radius: 999px;
+  min-height: 36px;
 }
 
 .donate-card,
@@ -2742,6 +2770,8 @@ p {
   background: #ffffff;
   box-shadow: 0 14px 30px rgba(15, 59, 132, 0.12);
   padding: clamp(14px, 2.6vw, 22px);
+  display: grid;
+  gap: 12px;
 }
 
 .donate-head h1 {
@@ -2751,7 +2781,7 @@ p {
 }
 
 .donate-head p {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   color: #475569;
   font-weight: 600;
 }
@@ -2770,9 +2800,9 @@ p {
 }
 
 .donate-form-grid {
-  margin-top: 12px;
+  margin-top: 4px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .donate-field {
@@ -2804,6 +2834,7 @@ p {
   font-size: 12px;
   font-weight: 700;
   justify-self: end;
+  margin-top: -2px;
 }
 
 .donate-page .donate-start-btn {
@@ -2926,16 +2957,21 @@ p {
 }
 
 .donate-choice-modal-card {
-  width: min(520px, 100%);
+  width: min(560px, 100%);
   border-radius: 18px;
-  padding: 16px;
+  padding: clamp(16px, 3vw, 22px);
+}
+
+.donate-choice-prompt {
+  margin: 2px 0 0;
+  color: #475569;
 }
 
 .donate-choice-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .donate-choice-actions button {
@@ -2973,9 +3009,15 @@ p {
 }
 
 .donate-guest-form {
-  margin-top: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
   display: grid;
   gap: 10px;
+}
+
+.donate-guest-actions {
+  margin-top: 6px;
 }
 
 .donate-guest-error {
@@ -3052,6 +3094,11 @@ p {
     padding: 0 10px 18px;
   }
 
+  .donate-page-nav,
+  .donor-page-nav {
+    margin-bottom: 8px;
+  }
+
   .donor-metrics,
   .donate-success-grid {
     grid-template-columns: 1fr;
@@ -3068,12 +3115,17 @@ p {
 }
 
 /* ---------- UI POLISH ---------- */
+:root {
+  --ui-anim-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   background: #ffffff;
+  animation: fadeIn .3s var(--ui-anim-ease) both;
 }
 
 .left,
@@ -3086,16 +3138,116 @@ body {
 .address-map-card,
 .pickup-card,
 .method-card,
-.metric-card {
-  animation: riseIn .45s ease both;
+.metric-card,
+.status-card,
+.comments-meta-card,
+.comments-compose,
+.comments-list-wrap,
+.donate-card,
+.donor-wall-card,
+.wrap {
+  animation: riseIn .45s var(--ui-anim-ease) both;
 }
 
 .checkout,
 .orders-page,
 .invoice-page,
 .admin-page,
-.scan-page {
-  animation: fadeIn .35s ease both;
+.scan-page,
+.cart-page,
+.donate-page,
+.donor-page,
+.status-shell,
+.comments-shell,
+.invoice-topbar {
+  animation: fadeIn .35s var(--ui-anim-ease) both;
+}
+
+.checkout > *,
+.orders-page > *,
+.admin-page > *,
+.cart-page > *,
+.comments-shell > *,
+.donate-card > *,
+.donor-wall-card > *,
+.status-shell > * {
+  animation: riseIn .42s var(--ui-anim-ease) both;
+}
+
+.checkout > *:nth-child(1),
+.orders-page > *:nth-child(1),
+.admin-page > *:nth-child(1),
+.cart-page > *:nth-child(1),
+.comments-shell > *:nth-child(1),
+.donate-card > *:nth-child(1),
+.donor-wall-card > *:nth-child(1),
+.status-shell > *:nth-child(1) { animation-delay: .03s; }
+
+.checkout > *:nth-child(2),
+.orders-page > *:nth-child(2),
+.admin-page > *:nth-child(2),
+.cart-page > *:nth-child(2),
+.comments-shell > *:nth-child(2),
+.donate-card > *:nth-child(2),
+.donor-wall-card > *:nth-child(2),
+.status-shell > *:nth-child(2) { animation-delay: .07s; }
+
+.checkout > *:nth-child(3),
+.orders-page > *:nth-child(3),
+.admin-page > *:nth-child(3),
+.cart-page > *:nth-child(3),
+.comments-shell > *:nth-child(3),
+.donate-card > *:nth-child(3),
+.donor-wall-card > *:nth-child(3),
+.status-shell > *:nth-child(3) { animation-delay: .11s; }
+
+.checkout > *:nth-child(4),
+.orders-page > *:nth-child(4),
+.admin-page > *:nth-child(4),
+.cart-page > *:nth-child(4),
+.comments-shell > *:nth-child(4),
+.donate-card > *:nth-child(4),
+.donor-wall-card > *:nth-child(4),
+.status-shell > *:nth-child(4) { animation-delay: .15s; }
+
+.checkout > *:nth-child(5),
+.orders-page > *:nth-child(5),
+.admin-page > *:nth-child(5),
+.cart-page > *:nth-child(5),
+.comments-shell > *:nth-child(5),
+.donate-card > *:nth-child(5),
+.donor-wall-card > *:nth-child(5),
+.status-shell > *:nth-child(5) { animation-delay: .19s; }
+
+.checkout > *:nth-child(6),
+.orders-page > *:nth-child(6),
+.admin-page > *:nth-child(6),
+.cart-page > *:nth-child(6),
+.comments-shell > *:nth-child(6),
+.donate-card > *:nth-child(6),
+.donor-wall-card > *:nth-child(6),
+.status-shell > *:nth-child(6) { animation-delay: .23s; }
+
+.checkout > *:nth-child(7),
+.orders-page > *:nth-child(7),
+.admin-page > *:nth-child(7),
+.cart-page > *:nth-child(7),
+.comments-shell > *:nth-child(7),
+.donate-card > *:nth-child(7),
+.donor-wall-card > *:nth-child(7),
+.status-shell > *:nth-child(7) { animation-delay: .27s; }
+
+.checkout > *:nth-child(8),
+.orders-page > *:nth-child(8),
+.admin-page > *:nth-child(8),
+.cart-page > *:nth-child(8),
+.comments-shell > *:nth-child(8),
+.donate-card > *:nth-child(8),
+.donor-wall-card > *:nth-child(8),
+.status-shell > *:nth-child(8) { animation-delay: .31s; }
+
+.signin-container {
+  animation: riseIn .45s var(--ui-anim-ease) both;
 }
 
 .input,

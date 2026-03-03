@@ -1,4 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
+  const donorPageBackBtn = document.getElementById("donorPageBackBtn");
   const donorWallFeedback = document.getElementById("donorWallFeedback");
   const donorMetricCount = document.getElementById("donorMetricCount");
   const donorMetricAmount = document.getElementById("donorMetricAmount");
@@ -94,6 +95,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         <div class="skeleton-line w-55"></div>
       </div>
     `).join("");
+  }
+
+  if (donorPageBackBtn) {
+    donorPageBackBtn.addEventListener("click", () => {
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+      window.location.href = "donate.html";
+    });
   }
 
   if (!appDb || !appDb.isConfigured() || typeof appDb.watchRecentDonations !== "function") {

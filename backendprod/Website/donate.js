@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const donateMessageInput = document.getElementById("donateMessageInput");
   const donateMessageCount = document.getElementById("donateMessageCount");
   const donateQuickAmounts = document.getElementById("donateQuickAmounts");
+  const donatePageBackBtn = document.getElementById("donatePageBackBtn");
   const startDonateBtn = document.getElementById("startDonateBtn");
   const donateQrSection = document.getElementById("donateQrSection");
   const donateQrImage = document.getElementById("donateQrImage");
@@ -20,6 +21,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const viewDonationReceiptBtn = document.getElementById("viewDonationReceiptBtn");
   const donateChoiceModal = document.getElementById("donateChoiceModal");
   const donateChoiceCloseBtn = document.getElementById("donateChoiceCloseBtn");
+  const donateChoicePrompt = document.getElementById("donateChoicePrompt");
+  const donateChoiceActions = document.getElementById("donateChoiceActions");
   const donateChoiceSigninBtn = document.getElementById("donateChoiceSigninBtn");
   const donateChoiceGuestBtn = document.getElementById("donateChoiceGuestBtn");
   const donateGuestForm = document.getElementById("donateGuestForm");
@@ -167,11 +170,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function showGuestForm(show) {
     if (show) {
+      if (donateChoicePrompt) {
+        donateChoicePrompt.classList.add("hidden");
+      }
+      if (donateChoiceActions) {
+        donateChoiceActions.classList.add("hidden");
+      }
       donateGuestForm.classList.remove("hidden");
       donateGuestNameInput.focus();
       return;
     }
 
+    if (donateChoicePrompt) {
+      donateChoicePrompt.classList.remove("hidden");
+    }
+    if (donateChoiceActions) {
+      donateChoiceActions.classList.remove("hidden");
+    }
     donateGuestForm.classList.add("hidden");
     donateGuestError.classList.add("hidden");
     donateGuestError.textContent = "";
@@ -545,6 +560,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   resetSuccessCard();
   setStartButtonState(false, defaultStartButtonLabel);
 
+  if (donatePageBackBtn) {
+    donatePageBackBtn.addEventListener("click", () => {
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+      window.location.href = "orders.html";
+    });
+  }
+
   if (donateQuickAmounts) {
     donateQuickAmounts.querySelectorAll("[data-amount]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -570,7 +595,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     showGuestForm(true);
   });
   donateGuestBackBtn.addEventListener("click", () => {
-    showGuestForm(false);
+    closeChoiceModal();
   });
 
   donateGuestAnonymousCheckbox.addEventListener("change", () => {

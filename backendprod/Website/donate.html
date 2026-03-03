@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Support Donations</title>
-<link rel="stylesheet" href="style.css?v=20260304donate1">
+<link rel="stylesheet" href="style.css?v=20260304donate2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -12,6 +12,10 @@
 <body>
 
 <div class="donate-page">
+  <div class="donate-page-nav">
+    <button id="donatePageBackBtn" type="button" class="invoice-back" data-ui-icon="arrow-left">Back</button>
+  </div>
+
   <div class="donate-card">
     <div class="donate-head">
       <h1 data-ui-icon="hand-heart">Support Habi't Likha</h1>
@@ -74,7 +78,7 @@
       <button id="donateChoiceCloseBtn" type="button" data-ui-icon="x-circle">Close</button>
     </div>
 
-    <p>Would you like to sign in first, or donate without an account?</p>
+    <p id="donateChoicePrompt" class="donate-choice-prompt">Would you like to sign in first, or donate without an account?</p>
     <div class="donate-choice-actions" id="donateChoiceActions">
       <button id="donateChoiceSigninBtn" type="button" data-ui-icon="log-in">Sign In</button>
       <button id="donateChoiceGuestBtn" type="button" data-ui-icon="user-round">Donate Without Account</button>
@@ -90,8 +94,8 @@
         Donate anonymously
       </label>
       <p id="donateGuestError" class="donate-guest-error hidden"></p>
-      <div class="donate-choice-actions">
-        <button id="donateGuestBackBtn" type="button" data-ui-icon="arrow-left">Back</button>
+      <div class="donate-choice-actions donate-guest-actions">
+        <button id="donateGuestBackBtn" type="button" data-ui-icon="arrow-left">Back to Donate</button>
         <button id="donateGuestContinueBtn" type="button" class="pay-btn" data-ui-icon="qr-code">Continue to QR</button>
       </div>
     </div>
@@ -105,7 +109,7 @@
 <script src="auth-service.js?v=20260304donate1"></script>
 <script src="firebase-auth-helpers.js?v=20260304donate1"></script>
 <script src="firebase-db.js?v=20260304donate1"></script>
-<script src="donate.js?v=20260304donate1"></script>
+<script src="donate.js?v=20260304donate2"></script>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="icons.js?v=20260304icons1"></script>
 </body>
