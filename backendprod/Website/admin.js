@@ -627,6 +627,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     return url.toString();
   }
 
+  function buildAddToCartButtonUrl(productId) {
+    const url = new URL("add-to-cart-button.html", window.location.href);
+    url.search = "";
+    url.searchParams.set("compact", "1234");
+    url.searchParams.set("product_id", String(productId));
+    url.searchParams.set("qty", "1");
+    url.searchParams.set("ok_btn_text", "Added");
+    url.searchParams.set("ok_hold_ms", "2000");
+    return url.toString();
+  }
+
+  function buildProductCommentsUrl(productId) {
+    const url = new URL("comments.html", window.location.href);
+    url.search = "";
+    url.searchParams.set("product_id", String(productId));
+    return url.toString();
+  }
+
   function showProductLink(productId) {
     if (!productLinkResult || !productLinkInput || !openProductLinkBtn) return;
     const productUrl = buildProductUrl(productId);
@@ -1382,6 +1400,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const category = product.category || "General";
       const thumbUrl = normalizeImageUrl(product.image);
       const checkoutLink = buildProductUrl(product.id);
+      const addToCartLink = buildAddToCartButtonUrl(product.id);
+      const commentsLink = buildProductCommentsUrl(product.id);
 
       const card = document.createElement("div");
       card.className = "admin-product-card";
@@ -1405,6 +1425,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           <div class="admin-order-actions admin-product-actions">
             <button class="editBtn" type="button">Edit</button>
             <button class="copyCheckoutBtn" type="button">Copy product link</button>
+            <button class="copyAddToCartBtn" type="button">Copy add-to-cart link</button>
+            <button class="copyCommentsLinkBtn" type="button">Copy comments link</button>
             <button class="deleteBtn danger" type="button">Delete product</button>
             <a href="${escapeHtml(checkoutLink)}" target="_blank" rel="noopener noreferrer">Open checkout</a>
           </div>
@@ -1415,6 +1437,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       card.querySelector(".copyCheckoutBtn").addEventListener("click", async () => {
         const link = buildProductUrl(product.id);
         await copyText(link, `Product link copied for product #${product.id}.`);
+      });
+      card.querySelector(".copyAddToCartBtn").addEventListener("click", async () => {
+        await copyText(addToCartLink, `Add-to-cart embed link copied for product #${product.id}.`);
+      });
+      card.querySelector(".copyCommentsLinkBtn").addEventListener("click", async () => {
+        await copyText(commentsLink, `Comments link copied for product #${product.id}.`);
       });
       card.querySelector(".deleteBtn").addEventListener("click", async () => {
         const confirmed = window.confirm(`Delete product #${product.id}? This will hide it from listings.`);
