@@ -233,8 +233,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (userPanel) {
     userPanel.innerHTML = `
       <span class="email">${user.email || "Signed in"}</span>
-      <a href="orders.html" class="cartBtn">Orders</a>
-      <a href="cart.html" class="cartBtn">Cart</a>
       <button id="profileLogoutBtn" type="button">Log out</button>
     `;
   }

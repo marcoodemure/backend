@@ -8,13 +8,19 @@
   html, body {
     margin: 0;
     padding: 0;
+    width: 100%;
     min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     background: #f8fafc;
     color: #0f172a;
     font-family: "Inter", Arial, sans-serif;
   }
 
   body {
+    min-height: 100vh;
+    min-height: 100dvh;
     display: grid;
     place-items: center;
     padding: clamp(12px, 3vw, 26px);

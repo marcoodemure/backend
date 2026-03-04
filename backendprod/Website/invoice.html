@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Order E-Receipt</title>
-<link rel="stylesheet" href="style.css?v=20260304motion1">
+<link rel="stylesheet" href="style.css?v=20260305mobile5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -13,10 +13,10 @@
 
 <div class="invoice-page">
   <div class="invoice-topbar">
-    <a href="orders.html" class="invoice-back" data-ui-icon="arrow-left">Back to Orders</a>
+    <a href="orders.html" class="invoice-back invoice-action-pill invoice-action-back" data-ui-icon="arrow-left">Back to Orders</a>
     <div class="invoice-actions">
-      <button id="downloadPdfBtn" type="button" data-ui-icon="download">Download PDF</button>
-      <button id="printInvoiceBtn" type="button" data-ui-icon="printer">Print Invoice</button>
+      <button id="downloadPdfBtn" class="invoice-action-pill invoice-action-download" type="button" data-ui-icon="download">Download PDF</button>
+      <button id="printInvoiceBtn" class="invoice-action-pill invoice-action-print" type="button" data-ui-icon="printer">Print Invoice</button>
     </div>
   </div>
 
@@ -34,9 +34,8 @@
 <script src="auth-service.js"></script>
 <script src="firebase-auth-helpers.js"></script>
 <script src="firebase-db.js"></script>
-<script src="invoice.js"></script>
+<script src="invoice.js?v=20260305ui1"></script>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="icons.js?v=20260304icons1"></script>
 </body>
 </html>
-

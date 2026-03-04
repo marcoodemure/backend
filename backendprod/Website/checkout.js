@@ -44,6 +44,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   const qrPaymentOpenScanBtn = document.getElementById("qrPaymentOpenScanBtn");
   const qrPaymentCancelBtn = document.getElementById("qrPaymentCancelBtn");
   const orderNotesInput = document.getElementById("orderNotesInput");
+  const optionalDetailsToggleBtn = document.getElementById("optionalDetailsToggleBtn");
+  const optionalDetailsWrap = document.getElementById("optionalDetailsWrap");
+  const optionalNotesPanel = document.getElementById("optionalNotesPanel");
+  const checkoutErrorSummary = document.getElementById("checkoutErrorSummary");
+  const checkoutErrorList = document.getElementById("checkoutErrorList");
+  const checkoutReadiness = document.getElementById("checkoutReadiness");
+  const checkoutReadinessList = document.getElementById("checkoutReadinessList");
+  const paymentActionHint = document.getElementById("paymentActionHint");
+  const mobileCheckoutBar = document.getElementById("mobileCheckoutBar");
+  const mobilePayBtn = document.getElementById("mobilePayBtn");
+  const mobileCheckoutTotal = document.getElementById("mobileCheckoutTotal");
+  const trustDeliveryEta = document.getElementById("trustDeliveryEta");
+  const trustPaymentNote = document.getElementById("trustPaymentNote");
+  const trustReturnNote = document.getElementById("trustReturnNote");
 
   const countryInput = document.getElementById("countryInput");
   const firstNameInput = document.getElementById("firstNameInput");
@@ -79,6 +93,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const auth = window.authService;
   const appDb = window.appDb;
   const CHECKOUT_QUEUE_KEY = "checkoutQueueV1";
+  const CHECKOUT_AUTOSAVE_PREFIX = "checkoutDraftV2";
+  const CHECKOUT_ANALYTICS_KEY = "checkoutAnalyticsV1";
 
   const requiredElements = {
     shipBtn,
@@ -108,6 +124,37 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.error(`Failed to parse localStorage key: ${key}`, err);
       return fallback;
     }
+  }
+
+  function trackCheckoutEvent(eventName, payload) {
+    if (!eventName) return;
+    const entry = {
+      event: String(eventName),
+      at: new Date().toISOString(),
+      productId: Number.isFinite(Number(resolvedProductId)) ? Number(resolvedProductId) : null,
+      payload: payload && typeof payload === "object" ? payload : {}
+    };
+
+    try {
+      const history = readJson(CHECKOUT_ANALYTICS_KEY, []);
+      const nextHistory = Array.isArray(history) ? history.slice(-199) : [];
+      nextHistory.push(entry);
+      localStorage.setItem(CHECKOUT_ANALYTICS_KEY, JSON.stringify(nextHistory));
+    } catch {}
+
+    try {
+      if (Array.isArray(window.dataLayer)) {
+        window.dataLayer.push({
+          event: `checkout_${entry.event}`,
+          productId: entry.productId,
+          ...entry.payload
+        });
+      }
+    } catch {}
+
+    try {
+      window.dispatchEvent(new CustomEvent("checkout:analytics", { detail: entry }));
+    } catch {}
   }
 
   function normalizeCheckoutQueue(list) {
@@ -262,6 +309,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (phoneInput) phoneInput.value = address.phone || "";
   }
 
+  function isShippingAddressMostlyEmpty() {
+    const payload = getShippingAddressPayload();
+    const populated = Object.values(payload).filter((value) => String(value || "").trim()).length;
+    return populated <= 1;
+  }
+
   function setAddressHint(message, type) {
     if (!addressMapHint) return;
     addressMapHint.classList.remove("is-error", "is-success", "is-info");
@@ -381,6 +434,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateInlineValidationHints();
     updateCheckoutProgress();
     renderCart();
+    scheduleAutosaveDraft();
     setSavedAddressStatus(`${getSlotLabel(safeSlot)} address applied with pin restore.`, "success");
     persistCartState().catch((error) => console.error("Failed to persist saved address apply", error));
   }
@@ -571,6 +625,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     const current = !emailDone ? "contact" : !addressDone ? "address" : !pinDone ? "pin" : "payment";
+    if (current !== lastTrackedProgressStep) {
+      lastTrackedProgressStep = current;
+      trackCheckoutEvent("step_viewed", {
+        step: current,
+        deliveryMethod
+      });
+    }
+
+    Object.entries(states).forEach(([stepKey, isDone]) => {
+      if (isDone && !trackedCompletedSteps.has(stepKey)) {
+        trackedCompletedSteps.add(stepKey);
+        trackCheckoutEvent("step_completed", { step: stepKey, deliveryMethod });
+      }
+    });
+
     checkoutProgress.querySelectorAll(".checkout-progress-step").forEach((stepEl) => {
       const key = String(stepEl.dataset.step || "");
       stepEl.classList.remove("is-active", "is-done");
@@ -587,6 +656,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         stepEl.setAttribute("aria-current", "step");
       }
     });
+    renderCheckoutReadiness();
   }
 
   function playPinSuccessAnimation() {
@@ -930,11 +1000,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         setAddressHint(`${prefix}Approximate location only (${coordsLabel}). Drag pin closer and confirm.`, "info");
       }
+      scheduleAutosaveDraft();
       persistCartState().catch((persistError) => console.error("Failed to persist map location", persistError));
     } catch (error) {
       console.error("Failed to reverse geocode", error);
       saveSelectedShippingLocation(lng, lat);
       setAddressHint(options?.errorMessage || "Location selected, but reverse lookup failed.", "error");
+      scheduleAutosaveDraft();
       persistCartState().catch((persistError) => console.error("Failed to persist map location", persistError));
     }
   }
@@ -1101,59 +1173,256 @@ document.addEventListener("DOMContentLoaded", async () => {
     emailInput.classList.add("input-invalid");
   }
 
+  function setOptionalDetailsExpanded(expanded, options) {
+    const shouldExpand = Boolean(expanded);
+    if (optionalDetailsWrap) {
+      optionalDetailsWrap.classList.toggle("hidden", !shouldExpand);
+    }
+    if (optionalNotesPanel) {
+      optionalNotesPanel.classList.toggle("hidden", !shouldExpand);
+    }
+    if (optionalDetailsToggleBtn) {
+      optionalDetailsToggleBtn.setAttribute("aria-expanded", shouldExpand ? "true" : "false");
+      optionalDetailsToggleBtn.textContent = shouldExpand ? "Hide optional details" : "Add optional details";
+    }
+    if (!options?.skipTracking) {
+      trackCheckoutEvent("optional_details_toggled", { expanded: shouldExpand });
+    }
+  }
+
+  function hydrateOptionalDetailsState() {
+    const hasOptionalValue = Boolean(
+      readInputValue(companyInput)
+      || readInputValue(addressLine2Input)
+      || readInputValue(orderNotesInput)
+    );
+    setOptionalDetailsExpanded(hasOptionalValue, { skipTracking: true });
+  }
+
+  function clearCheckoutErrorSummary() {
+    if (!checkoutErrorSummary || !checkoutErrorList) return;
+    checkoutErrorList.innerHTML = "";
+    checkoutErrorSummary.classList.add("hidden");
+  }
+
+  function setCheckoutErrorSummary(items) {
+    if (!checkoutErrorSummary || !checkoutErrorList) return;
+    const source = Array.isArray(items) ? items : [];
+    checkoutErrorList.innerHTML = "";
+
+    if (!source.length) {
+      checkoutErrorSummary.classList.add("hidden");
+      return;
+    }
+
+    source.forEach((item) => {
+      const targetId = String(item?.targetId || "");
+      const message = String(item?.message || "").trim();
+      if (!targetId || !message) return;
+
+      const row = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = `#${targetId}`;
+      link.textContent = message;
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const target = document.getElementById(targetId);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          if (typeof target.focus === "function") {
+            target.focus();
+          }
+        }
+      });
+      row.appendChild(link);
+      checkoutErrorList.appendChild(row);
+    });
+
+    if (!checkoutErrorList.children.length) {
+      checkoutErrorSummary.classList.add("hidden");
+      return;
+    }
+
+    checkoutErrorSummary.classList.remove("hidden");
+    if (typeof checkoutErrorSummary.focus === "function") {
+      checkoutErrorSummary.focus();
+    }
+  }
+
+  function getPickupMissingFields() {
+    const issues = [];
+    const pickupDetails = getPickupPayload();
+    if (!pickupDetails.contactName) {
+      issues.push({ targetId: "pickupNameInput", message: "Pickup contact name is required." });
+    }
+    if (!isPhoneLikelyValid(pickupDetails.contactPhone)) {
+      issues.push({ targetId: "pickupContactInput", message: "Pickup phone should have 7-15 digits." });
+    }
+    if (!pickupDetails.pickupDate) {
+      issues.push({ targetId: "pickupDateInput", message: "Pickup date is required." });
+    }
+    if (!pickupDetails.pickupTimeSlot) {
+      issues.push({ targetId: "pickupTimeInput", message: "Pickup time slot is required." });
+    }
+    if (!pickupDetails.agreedToBringId) {
+      issues.push({ targetId: "pickupAgreeCheckbox", message: "Confirm that you'll bring a valid ID." });
+    }
+    return issues;
+  }
+
+  function getReadinessItems() {
+    const selectedPayment = document.querySelector('input[name="payment"]:checked');
+    const emailDone = isValidEmail(readInputValue(emailInput));
+    const shippingMissingParts = deliveryMethod === "ship" ? getMissingAddressParts() : [];
+    const pickupIssues = deliveryMethod === "pickup" ? getPickupMissingFields() : [];
+    const shipAddressDone = deliveryMethod === "ship"
+      ? shippingMissingParts.length === 0
+        && isPostalCodeLikelyValid(readInputValue(postalCodeInput))
+        && isPhoneLikelyValid(readInputValue(phoneInput))
+      : true;
+    const pinDone = deliveryMethod === "pickup"
+      ? true
+      : Boolean(selectedShippingLocation && isShippingLocationConfirmed);
+
+    return [
+      {
+        key: "email",
+        targetId: "emailInput",
+        done: emailDone,
+        message: emailDone ? "Email looks valid." : "Add a valid email address."
+      },
+      {
+        key: "address",
+        targetId: deliveryMethod === "pickup" ? "pickupNameInput" : "addressLine1Input",
+        done: deliveryMethod === "pickup" ? pickupIssues.length === 0 : shipAddressDone,
+        message: deliveryMethod === "pickup"
+          ? (pickupIssues.length ? "Complete all pickup details." : "Pickup details complete.")
+          : (shipAddressDone ? "Required address details complete." : "Complete required address fields.")
+      },
+      {
+        key: "pin",
+        targetId: "confirmPinBtn",
+        done: pinDone,
+        message: deliveryMethod === "pickup"
+          ? "Pin step skipped for pickup."
+          : (pinDone ? "Delivery pin confirmed." : "Select and confirm your delivery pin.")
+      },
+      {
+        key: "payment",
+        targetId: selectedPayment?.id || "cash_on_delivery",
+        done: Boolean(selectedPayment),
+        message: selectedPayment
+          ? `Payment selected: ${formatPayment(selectedPayment.id)}.`
+          : "Select a payment method."
+      }
+    ];
+  }
+
+  function renderCheckoutReadiness() {
+    if (!checkoutReadinessList || !checkoutReadiness) return;
+    checkoutReadiness.classList.remove("hidden");
+    const items = getReadinessItems();
+    checkoutReadinessList.innerHTML = "";
+
+    items.forEach((item) => {
+      const row = document.createElement("li");
+      row.className = item.done ? "is-done" : "is-missing";
+      if (item.done) {
+        row.textContent = `\u2713 ${item.message}`;
+      } else {
+        const link = document.createElement("a");
+        link.href = `#${item.targetId}`;
+        link.textContent = item.message;
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          const target = document.getElementById(item.targetId);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (typeof target.focus === "function") {
+              target.focus();
+            }
+          }
+        });
+        row.appendChild(link);
+      }
+      checkoutReadinessList.appendChild(row);
+    });
+
+    if (paymentActionHint) {
+      const paymentMethod = getPaymentMethod();
+      paymentActionHint.textContent = paymentMethod === "gcash"
+        ? "You selected GCash. Tapping the button opens QR payment verification."
+        : "You selected Cash on Delivery. Tapping the button places your order directly.";
+    }
+  }
+
   function validateCheckoutInputs() {
+    clearCheckoutErrorSummary();
+    const issues = [];
     const email = emailInput.value.trim();
+    const selectedPayment = document.querySelector('input[name="payment"]:checked');
 
     if (!email) {
       setEmailError("Email is required.");
-      setCheckoutFeedback("error", "Please enter your email to continue.");
-      return false;
-    }
-
-    if (!isValidEmail(email)) {
+      issues.push({ targetId: "emailInput", message: "Email is required." });
+    } else if (!isValidEmail(email)) {
       setEmailError("Enter a valid email address.");
-      setCheckoutFeedback("error", "Please fix the email field and try again.");
-      return false;
+      issues.push({ targetId: "emailInput", message: "Enter a valid email address." });
+    } else {
+      setEmailError("");
     }
 
-    if (deliveryMethod === "pickup" && !validatePickupDetails()) {
-      setCheckoutFeedback("error", "Please complete pickup details before paying.");
-      return false;
-    }
-
-    if (deliveryMethod === "ship" && !selectedShippingLocation) {
-      setCheckoutFeedback("error", "Select your delivery pin on the map before paying.");
-      setAddressHint("Pick a delivery point on the map, then confirm the pin.", "error");
-      return false;
+    if (deliveryMethod === "pickup") {
+      const pickupIssues = getPickupMissingFields();
+      if (pickupIssues.length) {
+        setPickupHint(pickupIssues[0].message, "error");
+        pickupIssues.forEach((issue) => issues.push(issue));
+      } else {
+        validatePickupDetails();
+      }
     }
 
     if (deliveryMethod === "ship") {
       const missingParts = getMissingAddressParts();
       if (missingParts.length) {
-        setCheckoutFeedback("error", `Please complete: ${missingParts.join(", ")}.`);
-        setFieldHint(addressPartsHint, `Required before checkout: ${missingParts.join(", ")}.`, "error");
-        return false;
+        const message = `Complete required address fields: ${missingParts.join(", ")}.`;
+        setFieldHint(addressPartsHint, message, "error");
+        issues.push({ targetId: "addressLine1Input", message });
       }
       if (!isPostalCodeLikelyValid(readInputValue(postalCodeInput))) {
-        setCheckoutFeedback("error", "Postal code format looks incomplete.");
         setFieldHint(postalHint, "Please provide a valid postal code.", "error");
-        return false;
+        issues.push({ targetId: "postalCodeInput", message: "Postal code is required and must be valid." });
       }
       if (!isPhoneLikelyValid(readInputValue(phoneInput))) {
-        setCheckoutFeedback("error", "Phone format looks incomplete.");
         setFieldHint(phoneHint, "Please provide a valid contact number.", "error");
-        return false;
+        issues.push({ targetId: "phoneInput", message: "Phone number is required and must be valid." });
+      }
+      if (!selectedShippingLocation) {
+        setAddressHint("Pick a delivery point on the map, then confirm it.", "error");
+        issues.push({ targetId: "addressMapPreview", message: "Select your delivery pin on the map." });
+      } else if (!isShippingLocationConfirmed) {
+        setAddressHint("Click 'Confirm this pin' after placing the marker.", "info");
+        issues.push({ targetId: "confirmPinBtn", message: "Confirm your delivery pin before placing the order." });
       }
     }
 
-    if (deliveryMethod === "ship" && !isShippingLocationConfirmed) {
-      setCheckoutFeedback("error", "Confirm your map pin before paying.");
-      setAddressHint("Click 'Confirm this pin' after placing the marker.", "info");
+    if (!selectedPayment) {
+      issues.push({ targetId: "cash_on_delivery", message: "Select a payment method." });
+    }
+
+    if (issues.length) {
+      setCheckoutFeedback("error", issues[0].message);
+      setCheckoutErrorSummary(issues);
+      renderCheckoutReadiness();
+      trackCheckoutEvent("validation_failed", {
+        fields: issues.map((issue) => issue.targetId)
+      });
       return false;
     }
 
     setEmailError("");
     updateInlineValidationHints();
+    renderCheckoutReadiness();
     return true;
   }
 
@@ -1227,6 +1496,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const resolvedProductId = Number.isFinite(requestedProductId) && requestedProductId > 0
     ? requestedProductId
     : (queueEntry?.productId || 0);
+  const checkoutAutosaveKey = `${CHECKOUT_AUTOSAVE_PREFIX}:${resolvedProductId || "unknown"}`;
 
   if (!resolvedProductId) {
     cartSummary.innerHTML = '<p>Missing product_id in URL. Open checkout using checkout.html?product_id=YOUR_ID or from <a href="cart.html">cart.html</a>.</p>';
@@ -1258,6 +1528,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const DEFAULT_DELIVERY_PIN_KEY = "checkoutDefaultDeliveryPin";
   const SAVED_ADDRESS_SLOTS_KEY = "checkoutSavedAddressSlots";
   let pickupReference = createPickupReference();
+  let autosaveTimer = null;
+  let initialDraftHydrated = false;
+  let lastTrackedProgressStep = "";
+  const trackedCompletedSteps = new Set();
 
   function setPayButtonLoading(isLoading, label, options) {
     payButtonLoading = Boolean(isLoading);
@@ -1266,13 +1540,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       payBtn.disabled = true;
       payBtn.innerText = label || "Processing...";
       payBtn.classList.add("is-loading");
+      syncPrimaryActionButtons();
       return;
     }
 
     payBtn.classList.remove("is-loading");
     if (!options?.preserveLabel) {
       renderCart();
+      return;
     }
+    syncPrimaryActionButtons();
   }
 
   function setRadioValue(id) {
@@ -1296,6 +1573,49 @@ document.addEventListener("DOMContentLoaded", async () => {
   function getPaymentMethod() {
     const selected = document.querySelector('input[name="payment"]:checked');
     return selected ? selected.id : "cash_on_delivery";
+  }
+
+  function getPrimaryActionLabel() {
+    return getPaymentMethod() === "gcash" ? "Continue to payment" : "Place order";
+  }
+
+  function setMobileCheckoutBarVisible(visible) {
+    if (!mobileCheckoutBar) return;
+    mobileCheckoutBar.classList.toggle("hidden", !visible);
+  }
+
+  function syncPrimaryActionButtons() {
+    if (!mobilePayBtn || !payBtn) return;
+    mobilePayBtn.textContent = payBtn.textContent || "Place order";
+    mobilePayBtn.disabled = Boolean(payBtn.disabled);
+    mobilePayBtn.classList.toggle("is-loading", payBtn.classList.contains("is-loading"));
+  }
+
+  function bindMethodCardSelection() {
+    document.querySelectorAll(".method-card").forEach((card) => {
+      if (!card || card.dataset.cardSelectBound === "1") return;
+      const radio = card.querySelector('input[type="radio"]');
+      if (!radio) return;
+      card.dataset.cardSelectBound = "1";
+
+      const selectRadio = () => {
+        if (radio.disabled) return;
+        if (!radio.checked) {
+          radio.checked = true;
+          radio.dispatchEvent(new Event("change", { bubbles: true }));
+        } else if (typeof radio.focus === "function") {
+          radio.focus();
+        }
+      };
+
+      card.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest("input, label, a, button")) {
+          return;
+        }
+        selectRadio();
+      });
+    });
   }
 
   function updateDeliveryUI() {
@@ -1360,6 +1680,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const shippingFee = getShippingFee();
     const subtotal = product.price * quantity;
     const total = subtotal + shippingFee;
+    const paymentMethod = getPaymentMethod();
 
     const shippingLabel = deliveryMethod === "pickup"
       ? "Pickup"
@@ -1399,7 +1720,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       </div>
       <div class="summary-line">
         <span>Payment</span>
-        <span>${formatPayment(getPaymentMethod())}</span>
+        <span>${formatPayment(paymentMethod)}</span>
       </div>
       <div class="total">
         <span>Total</span>
@@ -1416,6 +1737,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (quantity > 1) {
           quantity -= 1;
           renderCart();
+          scheduleAutosaveDraft();
           persistCartState().catch((error) => console.error("Failed to persist cart", error));
         }
       });
@@ -1430,11 +1752,38 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         quantity += 1;
         renderCart();
+        scheduleAutosaveDraft();
         persistCartState().catch((error) => console.error("Failed to persist cart", error));
       });
     }
 
+    if (mobileCheckoutTotal) {
+      mobileCheckoutTotal.textContent = formatMoney(total);
+    }
+
+    if (trustDeliveryEta) {
+      trustDeliveryEta.textContent = deliveryMethod === "pickup"
+        ? "Pickup usually ready in about 5+ days."
+        : shippingLabel === "Express Shipping"
+          ? "ETA: 1-2 business days for Express Shipping."
+          : "ETA: 3-5 business days for Standard Shipping.";
+    }
+
+    if (trustPaymentNote) {
+      trustPaymentNote.textContent = paymentMethod === "gcash"
+        ? "GCash selected: QR verification is required before finalizing."
+        : "Cash on Delivery selected: pay when your item arrives.";
+    }
+
+    if (trustReturnNote) {
+      trustReturnNote.textContent = deliveryMethod === "pickup"
+        ? "Bring a valid ID and your pickup reference at collection."
+        : "Support is available for delivery issues and return concerns.";
+    }
+
     if (payButtonLoading) {
+      syncPrimaryActionButtons();
+      renderCheckoutReadiness();
       return;
     }
 
@@ -1443,8 +1792,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       payBtn.innerText = "Out of stock";
     } else {
       payBtn.disabled = false;
-      payBtn.innerText = "Pay now";
+      payBtn.innerText = getPrimaryActionLabel();
     }
+    syncPrimaryActionButtons();
+    renderCheckoutReadiness();
+    setMobileCheckoutBarVisible(orderComplete?.classList.contains("hidden"));
   }
 
   function buildOrderDraft() {
@@ -1475,10 +1827,46 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
   }
 
+  function loadAutosavedDraft() {
+    const draft = readJson(checkoutAutosaveKey, null);
+    if (!draft || Number(draft.productId) !== Number(resolvedProductId)) {
+      return null;
+    }
+    return draft;
+  }
+
+  function clearAutosavedDraft() {
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+    }
+    localStorage.removeItem(checkoutAutosaveKey);
+  }
+
+  function saveAutosavedDraft() {
+    if (!product) return;
+    const snapshot = {
+      ...buildOrderDraft(),
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(checkoutAutosaveKey, JSON.stringify(snapshot));
+  }
+
+  function scheduleAutosaveDraft() {
+    if (!product) return;
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+    }
+    autosaveTimer = setTimeout(() => {
+      saveAutosavedDraft();
+    }, 280);
+  }
+
   function savePendingDraft() {
     const draft = buildOrderDraft();
     localStorage.setItem("pendingOrderDraft", JSON.stringify(draft));
     pendingDraft = draft;
+    saveAutosavedDraft();
   }
 
   function showAuthPrompt() {
@@ -1536,6 +1924,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function showOrderComplete(order) {
     hideQrPaymentModal({ keepPayDisabled: true });
     setCheckoutFeedback("success", "Purchase successful. Your order is now pending.");
+    clearCheckoutErrorSummary();
     orderCompleteText.innerText = `Order complete. Total: ${formatMoney(order.totalPrice)}`;
     if (pickupCompleteInfo) {
       const pickupDetails = order?.pickupDetails || null;
@@ -1561,6 +1950,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateCheckoutProgress();
     payBtn.disabled = true;
     payBtn.innerText = "Order complete";
+    syncPrimaryActionButtons();
+    setMobileCheckoutBarVisible(false);
+    clearAutosavedDraft();
+    localStorage.removeItem("pendingOrderDraft");
+    pendingDraft = null;
+    if (checkoutReadiness) {
+      checkoutReadiness.classList.add("hidden");
+    }
+    trackCheckoutEvent("order_completed", {
+      deliveryMethod: order?.deliveryMethod || deliveryMethod,
+      paymentMethod: order?.paymentMethod || getPaymentMethod(),
+      totalPrice: Number(order?.totalPrice || 0)
+    });
     syncNextCheckoutButton();
     hideAuthPrompt();
   }
@@ -1608,7 +2010,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (isRemoteDbReady() && user.uid && typeof appDb.getUserProfile === "function") {
       try {
         const profile = await appDb.getUserProfile(user.uid);
-        if (profile?.profile) {
+        if (profile?.profile && !initialDraftHydrated && isShippingAddressMostlyEmpty()) {
           applyShippingAddress(profile.profile);
         }
       } catch (error) {
@@ -1616,7 +2018,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
 
-    if (isRemoteDbReady() && user.uid && !remoteCartLoaded) {
+    if (isRemoteDbReady() && user.uid && !remoteCartLoaded && !initialDraftHydrated) {
       try {
         const remoteCart = await appDb.getCart(user.uid);
         remoteCartLoaded = true;
@@ -1793,6 +2195,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       throw new Error("payment_session_failed");
     }
 
+    trackCheckoutEvent("gcash_qr_session_created", {
+      sessionId: String(session.id),
+      amount: Number(orderDraft.totalPrice || 0)
+    });
+
     activePaymentSessionId = session.id;
     const qrUrl = buildQrScanUrl(session.id);
     qrPaymentImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrUrl)}`;
@@ -1814,6 +2221,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       paymentFinalizing = true;
+      trackCheckoutEvent("gcash_payment_detected", { sessionId: String(session.id) });
       qrPaymentStatus.textContent = "Scan detected. Finalizing order...";
       setCheckoutFeedback("info", "Payment detected. Finalizing your order...");
       setPayButtonLoading(true, "Finalizing order...");
@@ -1887,6 +2295,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function setDeliveryMethod(nextMethod) {
     deliveryMethod = nextMethod;
+    trackCheckoutEvent("delivery_method_changed", { deliveryMethod });
     if (deliveryMethod === "pickup") {
       if (pickupNameInput && !readInputValue(pickupNameInput)) {
         const fullName = [readInputValue(firstNameInput), readInputValue(lastNameInput)].filter(Boolean).join(" ");
@@ -1900,6 +2309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateDeliveryUI();
     updateCheckoutProgress();
     renderCart();
+    scheduleAutosaveDraft();
     persistCartState().catch((error) => console.error("Failed to persist cart", error));
   }
 
@@ -1921,28 +2331,50 @@ document.addEventListener("DOMContentLoaded", async () => {
     setDeliveryMethod("ship");
   });
 
+  if (optionalDetailsToggleBtn) {
+    optionalDetailsToggleBtn.addEventListener("click", () => {
+      const expanded = optionalDetailsToggleBtn.getAttribute("aria-expanded") === "true";
+      setOptionalDetailsExpanded(!expanded);
+      scheduleAutosaveDraft();
+    });
+  }
+
+  if (mobilePayBtn) {
+    mobilePayBtn.addEventListener("click", () => {
+      if (!mobilePayBtn.disabled) {
+        trackCheckoutEvent("mobile_pay_tapped", { deliveryMethod, paymentMethod: getPaymentMethod() });
+        payBtn.click();
+      }
+    });
+  }
+
   emailInput.addEventListener("input", () => {
     if (isValidEmail(emailInput.value.trim())) {
       setEmailError("");
     }
     setCheckoutFeedback("", "");
+    clearCheckoutErrorSummary();
     updateCheckoutProgress();
+    scheduleAutosaveDraft();
   });
 
   if (savedAddressSlotSelect) {
     savedAddressSlotSelect.addEventListener("change", () => {
       applySavedAddressSlot(getActiveSavedAddressSlot());
+      scheduleAutosaveDraft();
     });
   }
   if (saveAddressSlotBtn) {
     saveAddressSlotBtn.addEventListener("click", () => {
       saveCurrentAddressToSlot(getActiveSavedAddressSlot());
+      scheduleAutosaveDraft();
       persistCartState().catch((error) => console.error("Failed to persist after saving address slot", error));
     });
   }
   if (clearAddressSlotBtn) {
     clearAddressSlotBtn.addEventListener("click", () => {
       clearSavedAddressSlot(getActiveSavedAddressSlot());
+      scheduleAutosaveDraft();
     });
   }
 
@@ -1953,6 +2385,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (deliveryMethod === "pickup") {
         validatePickupDetails();
       }
+      clearCheckoutErrorSummary();
+      scheduleAutosaveDraft();
       persistCartState().catch((error) => console.error("Failed to persist pickup details", error));
       updateCheckoutProgress();
     });
@@ -1964,8 +2398,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (selectedShippingLocation) {
         setLocationConfirmed(false);
       }
+      clearCheckoutErrorSummary();
       updateInlineValidationHints();
       updateCheckoutProgress();
+      scheduleAutosaveDraft();
       if (addressMapDebounce) {
         clearTimeout(addressMapDebounce);
       }
@@ -1975,8 +2411,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  [firstNameInput, lastNameInput, companyInput, addressLine2Input, orderNotesInput].forEach((field) => {
+    if (!field) return;
+    field.addEventListener("input", () => {
+      clearCheckoutErrorSummary();
+      updateCheckoutProgress();
+      scheduleAutosaveDraft();
+      persistCartState().catch((error) => console.error("Failed to persist draft field", error));
+      if (field === companyInput || field === addressLine2Input || field === orderNotesInput) {
+        hydrateOptionalDetailsState();
+      }
+    });
+  });
+
   if (locateAddressBtn) {
     locateAddressBtn.addEventListener("click", () => {
+      trackCheckoutEvent("address_lookup_clicked", { source: "typed_address" });
       locateTypedAddress().catch((error) => console.error("Failed to locate typed address", error));
     });
   }
@@ -1991,6 +2441,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       applySearchResult(picked, { successPrefix: "Selected match applied." }).catch((error) => {
         console.error("Failed to apply selected candidate", error);
       });
+      scheduleAutosaveDraft();
     });
   }
 
@@ -2001,6 +2452,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       applySearchResult(picked, { successPrefix: "Candidate previewed." }).catch((error) => {
         console.error("Failed to preview selected candidate", error);
       });
+      scheduleAutosaveDraft();
     });
   }
 
@@ -2016,6 +2468,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       saveDefaultDeliveryPin();
       const coordsLabel = formatCoordinateLabel(selectedShippingLocation.lng, selectedShippingLocation.lat);
       setAddressHint(`Pin confirmed at ${coordsLabel}.`, "success");
+      trackCheckoutEvent("pin_confirmed", { coordinates: coordsLabel });
+      scheduleAutosaveDraft();
       persistCartState().catch((error) => console.error("Failed to persist cart", error));
     });
   }
@@ -2028,6 +2482,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     useCurrentLocationBtn.addEventListener("click", () => {
+      trackCheckoutEvent("address_lookup_clicked", { source: "browser_geolocation" });
       useCurrentLocation().catch((error) => console.error("Failed to use current location", error));
     });
   }
@@ -2039,6 +2494,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         localStorage.removeItem(DEFAULT_DELIVERY_PIN_KEY);
       }
+      scheduleAutosaveDraft();
     });
   }
 
@@ -2047,6 +2503,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     qrPaymentCancelBtn.addEventListener("click", () => {
       hideQrPaymentModal();
       setCheckoutFeedback("info", "QR payment canceled.");
+      trackCheckoutEvent("gcash_qr_canceled", {});
     });
   }
 
@@ -2093,6 +2550,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   product = await loadProductById(resolvedProductId);
+  trackCheckoutEvent("checkout_loaded", { productId: resolvedProductId });
 
   if (!product) {
     cartSummary.innerHTML = `<p>Product #${resolvedProductId} was not found.</p>`;
@@ -2100,40 +2558,52 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  if (pendingDraft && Number(pendingDraft.productId) === Number(product.id)) {
-    quantity = Math.max(1, Number(pendingDraft.quantity) || 1);
-    deliveryMethod = pendingDraft.deliveryMethod === "pickup" ? "pickup" : "ship";
-    setRadioValue(pendingDraft.shippingOption);
-    setRadioValue(pendingDraft.paymentMethod);
+  const autosavedDraft = loadAutosavedDraft();
+  const draftToApply = pendingDraft && Number(pendingDraft.productId) === Number(product.id)
+    ? pendingDraft
+    : (autosavedDraft && Number(autosavedDraft.productId) === Number(product.id) ? autosavedDraft : null);
+
+  if (draftToApply) {
+    quantity = Math.max(1, Number(draftToApply.quantity) || 1);
+    deliveryMethod = draftToApply.deliveryMethod === "pickup" ? "pickup" : "ship";
+    setRadioValue(draftToApply.shippingOption);
+    setRadioValue(draftToApply.paymentMethod);
     if (orderNotesInput) {
-      orderNotesInput.value = pendingDraft.orderNotes || "";
+      orderNotesInput.value = draftToApply.orderNotes || "";
     }
-    if (pendingDraft.pickupDetails) {
-      applyPickupPayload(pendingDraft.pickupDetails);
+    if (draftToApply.pickupDetails) {
+      applyPickupPayload(draftToApply.pickupDetails);
     }
-    if (pendingDraft.shippingAddress) {
-      applyShippingAddress(pendingDraft.shippingAddress);
+    if (draftToApply.shippingAddress) {
+      applyShippingAddress(draftToApply.shippingAddress);
     }
     if (
-      pendingDraft.shippingLocation
-      && Number.isFinite(Number(pendingDraft.shippingLocation.lng))
-      && Number.isFinite(Number(pendingDraft.shippingLocation.lat))
+      draftToApply.shippingLocation
+      && Number.isFinite(Number(draftToApply.shippingLocation.lng))
+      && Number.isFinite(Number(draftToApply.shippingLocation.lat))
     ) {
       selectedShippingLocation = {
-        lng: toFixedCoordinate(pendingDraft.shippingLocation.lng),
-        lat: toFixedCoordinate(pendingDraft.shippingLocation.lat)
+        lng: toFixedCoordinate(draftToApply.shippingLocation.lng),
+        lat: toFixedCoordinate(draftToApply.shippingLocation.lat)
       };
-      isShippingLocationConfirmed = Boolean(pendingDraft.shippingLocationConfirmed);
-      if (pendingDraft.shippingLocationSnapshot?.imageUrl && pendingDraft.shippingLocationSnapshot?.mapUrl) {
+      isShippingLocationConfirmed = Boolean(draftToApply.shippingLocationConfirmed);
+      if (draftToApply.shippingLocationSnapshot?.imageUrl && draftToApply.shippingLocationSnapshot?.mapUrl) {
         selectedShippingSnapshot = {
-          embedUrl: pendingDraft.shippingLocationSnapshot.embedUrl
-            ? String(pendingDraft.shippingLocationSnapshot.embedUrl)
-            : String(pendingDraft.shippingLocationSnapshot.imageUrl),
-          imageUrl: String(pendingDraft.shippingLocationSnapshot.imageUrl),
-          mapUrl: String(pendingDraft.shippingLocationSnapshot.mapUrl)
+          embedUrl: draftToApply.shippingLocationSnapshot.embedUrl
+            ? String(draftToApply.shippingLocationSnapshot.embedUrl)
+            : String(draftToApply.shippingLocationSnapshot.imageUrl),
+          imageUrl: String(draftToApply.shippingLocationSnapshot.imageUrl),
+          mapUrl: String(draftToApply.shippingLocationSnapshot.mapUrl)
         };
       }
     }
+    initialDraftHydrated = true;
+    if (draftToApply === autosavedDraft && checkoutFeedback) {
+      setCheckoutFeedback("info", "Restored your in-progress checkout from this device.");
+    }
+    trackCheckoutEvent("draft_restored", {
+      source: draftToApply === pendingDraft ? "pending" : "autosave"
+    });
   } else {
     quantity = queueEntry?.quantity
       ? Math.max(1, Number(queueEntry.quantity) || 1)
@@ -2156,26 +2626,36 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   updateDeliveryUI();
   syncPickupReferenceDisplay();
+  hydrateOptionalDetailsState();
   setSavedAddressStatus("Tip: pick Home/School/Work, then save current address + pin for one-click reuse.", "info");
   if (deliveryMethod === "pickup") {
     validatePickupDetails();
   }
   updateInlineValidationHints();
+  clearCheckoutErrorSummary();
   updateCheckoutProgress();
   renderCart();
+  scheduleAutosaveDraft();
   await persistCartState();
   syncNextCheckoutButton();
+  bindMethodCardSelection();
 
   document.querySelectorAll('input[name="shipping"]').forEach((radio) => {
     radio.addEventListener("change", () => {
+      clearCheckoutErrorSummary();
       renderCart();
+      scheduleAutosaveDraft();
+      trackCheckoutEvent("shipping_option_changed", { shippingOption: getShippingOption() });
       persistCartState().catch((error) => console.error("Failed to persist cart", error));
     });
   });
 
   document.querySelectorAll('input[name="payment"]').forEach((radio) => {
     radio.addEventListener("change", () => {
+      clearCheckoutErrorSummary();
       renderCart();
+      scheduleAutosaveDraft();
+      trackCheckoutEvent("payment_method_changed", { paymentMethod: getPaymentMethod() });
       persistCartState().catch((error) => console.error("Failed to persist cart", error));
     });
   });
@@ -2203,7 +2683,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   payBtn.addEventListener("click", async () => {
     if (!product || payButtonLoading) return;
 
+    trackCheckoutEvent("pay_attempted", {
+      deliveryMethod,
+      paymentMethod: getPaymentMethod(),
+      quantity
+    });
     setCheckoutFeedback("", "");
+    clearCheckoutErrorSummary();
     hideAuthPrompt();
 
     if (!validateCheckoutInputs()) {
@@ -2219,19 +2705,27 @@ document.addEventListener("DOMContentLoaded", async () => {
       savePendingDraft();
       showAuthPrompt();
       setCheckoutFeedback("info", "Sign in or create an account to complete your purchase.");
+      trackCheckoutEvent("auth_required_before_checkout", { reason: "missing_user" });
       return;
     }
 
     const stock = getAvailableStock();
     if (Number.isFinite(stock) && quantity > stock) {
       setCheckoutFeedback("error", "Not enough stock available for the selected quantity.");
+      trackCheckoutEvent("checkout_blocked_out_of_stock", { stock, quantity });
       renderCart();
       return;
     }
 
     const orderDraft = buildOrderDraft();
+    trackCheckoutEvent("order_submission_started", {
+      deliveryMethod: orderDraft.deliveryMethod,
+      paymentMethod: orderDraft.paymentMethod,
+      totalPrice: Number(orderDraft.totalPrice || 0)
+    });
     setPayButtonLoading(true, "Processing...");
     saveDefaultDeliveryPin();
+    saveAutosavedDraft();
 
     try {
       if (saveProfileCheckbox?.checked && isRemoteDbReady() && user.uid && typeof appDb.updateUserProfile === "function") {
@@ -2261,6 +2755,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         setCheckoutFeedback("error", "Failed to place order. Please try again.");
       }
+
+      trackCheckoutEvent("order_submission_failed", {
+        code: String(error?.code || ""),
+        message: String(error?.message || "unknown_error")
+      });
 
       renderCart();
     } finally {

@@ -7,11 +7,10 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Checkout</title>
-<link rel="stylesheet" href="style.css?v=20260304motion1">
+<link rel="stylesheet" href="style.css?v=20260305mobile5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 </head>
 <body>
@@ -20,54 +19,70 @@
   <div class="left">
     <div class="section checkout-progress-wrap" aria-label="Checkout progress">
       <div id="checkoutProgress" class="checkout-progress" role="list">
-        <div class="checkout-progress-step is-active" data-step="contact" role="listitem" data-ui-icon="mail">Contact</div>
-        <div class="checkout-progress-step" data-step="address" role="listitem" data-ui-icon="map-pinned">Address</div>
-        <div class="checkout-progress-step" data-step="pin" role="listitem" data-ui-icon="check-circle">Pin Confirmed</div>
-        <div class="checkout-progress-step" data-step="payment" role="listitem" data-ui-icon="credit-card">Payment</div>
+        <div class="checkout-progress-step is-active" data-step="contact" role="listitem" data-ui-icon="mail">1. Contact</div>
+        <div class="checkout-progress-step" data-step="address" role="listitem" data-ui-icon="map-pinned">2. Address</div>
+        <div class="checkout-progress-step" data-step="pin" role="listitem" data-ui-icon="check-circle">3. Confirm Pin</div>
+        <div class="checkout-progress-step" data-step="payment" role="listitem" data-ui-icon="credit-card">4. Payment</div>
       </div>
     </div>
 
     <div class="section checkout-panel contact-panel">
       <div class="header-row">
-        <h2 class="section-title" data-ui-icon="mail">Contact</h2>
+        <h2 class="section-title" data-ui-icon="mail">Contact Details <span class="field-required">(Required)</span></h2>
         <div id="userStatus" class="user-status"></div>
       </div>
       <p class="section-subtitle">We will send your receipt and delivery updates to this email.</p>
 
+      <label class="sr-only" for="emailInput">Email address</label>
       <input class="input" id="emailInput" type="email" placeholder="Email" />
       <p id="emailError" class="input-error hidden"></p>
       <label class="checkbox">
-        <input type="checkbox" checked />
+        <input id="marketingOptInCheckbox" type="checkbox" checked />
         Email me with news and offers
       </label>
     </div>
 
     <div class="section checkout-panel delivery-panel">
-      <h2 class="section-title" data-ui-icon="truck">Delivery</h2>
+      <h2 class="section-title" data-ui-icon="truck">Delivery and Payment <span class="field-required">(Required)</span></h2>
       <p class="section-subtitle">Choose delivery or pickup, then complete only the details for that option.</p>
 
       <div class="toggle">
-        <button id="shipBtn" class="active" type="button" data-ui-icon="truck">Ship</button>
+        <button id="shipBtn" class="active" type="button" data-ui-icon="truck">Delivery</button>
         <button id="pickupBtn" type="button" data-ui-icon="store">Pickup</button>
       </div>
 
       <div id="shippingSection">
-        <p class="form-group-title">Recipient Information</p>
+        <p class="form-group-title">Recipient Information <span class="field-required">Required</span></p>
+        <label class="sr-only" for="countryInput">Country</label>
         <input class="input" id="countryInput" placeholder="Country" />
         <div class="row">
+          <label class="sr-only" for="firstNameInput">First name</label>
           <input class="input" id="firstNameInput" placeholder="First name" />
+          <label class="sr-only" for="lastNameInput">Last name</label>
           <input class="input" id="lastNameInput" placeholder="Last name" />
         </div>
-        <input class="input" id="companyInput" placeholder="Company (optional)" />
-        <p class="form-group-title">Address Details</p>
+        <button id="optionalDetailsToggleBtn" type="button" class="optional-toggle" aria-expanded="false" aria-controls="optionalDetailsWrap">
+          Add optional details
+        </button>
+        <div id="optionalDetailsWrap" class="optional-details-wrap hidden">
+          <label class="sr-only" for="companyInput">Company (optional)</label>
+          <input class="input" id="companyInput" placeholder="Company (optional)" />
+          <label class="sr-only" for="addressLine2Input">Apartment, suite, etc (optional)</label>
+          <input class="input" id="addressLine2Input" placeholder="Apartment, suite, etc. (optional)" />
+        </div>
+        <p class="form-group-title">Address Details <span class="field-required">Required</span></p>
+        <label class="sr-only" for="addressLine1Input">Street address</label>
         <input class="input" id="addressLine1Input" placeholder="Address" />
-        <input class="input" id="addressLine2Input" placeholder="Apartment, suite, etc. (optional)" />
         <div class="row">
+          <label class="sr-only" for="postalCodeInput">Postal code</label>
           <input class="input" id="postalCodeInput" placeholder="Postal code" />
+          <label class="sr-only" for="cityInput">City</label>
           <input class="input" id="cityInput" placeholder="City" />
         </div>
         <p id="postalHint" class="field-hint hidden" aria-live="polite"></p>
+        <label class="sr-only" for="provinceInput">Province</label>
         <input class="input" id="provinceInput" placeholder="Province" />
+        <label class="sr-only" for="phoneInput">Phone number</label>
         <input class="input" id="phoneInput" placeholder="Phone" />
         <p id="phoneHint" class="field-hint hidden" aria-live="polite"></p>
         <p id="addressPartsHint" class="field-hint hidden" aria-live="polite"></p>
@@ -87,7 +102,7 @@
         <p id="savedAddressStatus" class="field-hint hidden" aria-live="polite"></p>
 
         <div class="address-map-card">
-          <p class="form-group-title">Pin Exact Delivery Location</p>
+          <p class="form-group-title">Confirm Exact Delivery Pin</p>
           <div class="address-map-head">
             <h3 class="section-title-sm" data-ui-icon="map-pinned">Address Preview</h3>
             <div class="address-map-actions">
@@ -185,9 +200,13 @@
           <div class="pickup-meta">Usually ready in 5+ days</div>
 
           <div class="pickup-form-grid">
+            <label class="sr-only" for="pickupNameInput">Pickup contact name</label>
             <input class="input" id="pickupNameInput" placeholder="Pickup contact name" />
+            <label class="sr-only" for="pickupContactInput">Pickup contact phone</label>
             <input class="input" id="pickupContactInput" placeholder="Pickup contact phone" />
+            <label class="sr-only" for="pickupDateInput">Pickup date</label>
             <input class="input" id="pickupDateInput" type="date" />
+            <label class="sr-only" for="pickupTimeInput">Pickup time</label>
             <select class="input" id="pickupTimeInput">
               <option value="">Select pickup time</option>
               <option value="09:00-11:00">09:00-11:00</option>
@@ -206,14 +225,33 @@
         </div>
       </div>
 
-    <div class="section checkout-panel notes-panel">
-      <h2 class="section-title" data-ui-icon="notebook-pen">Order Notes</h2>
+    <div id="optionalNotesPanel" class="section checkout-panel notes-panel hidden">
+      <h2 class="section-title" data-ui-icon="notebook-pen">Notes (Optional)</h2>
       <p class="section-subtitle">Optional: add landmarks, gate instructions, or preferred contact notes.</p>
+      <label class="sr-only" for="orderNotesInput">Order notes</label>
       <textarea class="input checkout-notes" id="orderNotesInput" rows="4" placeholder="Add delivery instructions or special notes (optional)"></textarea>
     </div>
 
+    <div id="checkoutErrorSummary" class="checkout-error-summary hidden" role="alert" aria-live="assertive" tabindex="-1">
+      <p>Please complete the required fields:</p>
+      <ul id="checkoutErrorList"></ul>
+    </div>
+
+    <div id="checkoutReadiness" class="checkout-readiness" role="status" aria-live="polite">
+      <p class="checkout-readiness-title">Before placing order:</p>
+      <ul id="checkoutReadinessList" class="checkout-readiness-list"></ul>
+      <p id="paymentActionHint" class="payment-action-hint"></p>
+    </div>
+
     <div id="checkoutFeedback" class="checkout-feedback hidden" role="status" aria-live="polite"></div>
-    <button class="pay-btn" type="button" data-ui-icon="credit-card">Pay now</button>
+    <button class="pay-btn" type="button" data-ui-icon="credit-card">Place order</button>
+    <div id="mobileCheckoutBar" class="mobile-checkout-bar">
+      <div class="mobile-checkout-total">
+        <span>Total</span>
+        <strong id="mobileCheckoutTotal">PHP 0.00</strong>
+      </div>
+      <button id="mobilePayBtn" type="button" class="mobile-pay-btn">Place order</button>
+    </div>
     <div id="pinSuccessMark" class="pin-success-mark hidden" aria-hidden="true">Pin saved</div>
 
     <div id="orderComplete" class="order-complete hidden">
@@ -232,9 +270,23 @@
   <div class="right">
     <div class="checkout-side-head">
       <h2 class="section-title" data-ui-icon="chart-no-axes-column">Order Summary</h2>
-      <p>Review items, quantity, payment, and total before placing your order.</p>
+      <p>Review quantity, shipping fee, payment, and total before confirming.</p>
     </div>
     <div id="cartSummary"></div>
+    <div id="checkoutTrustCues" class="checkout-trust-cues">
+      <div class="trust-cue" data-ui-icon="clock-3">
+        <strong id="trustDeliveryEta">Delivery ETA updates based on your selected method.</strong>
+        <span>Estimated timeline is shown before payment.</span>
+      </div>
+      <div class="trust-cue" data-ui-icon="shield-check">
+        <strong id="trustPaymentNote">Secure payment and protected order handling.</strong>
+        <span>You can use Cash on Delivery or verified GCash QR flow.</span>
+      </div>
+      <div class="trust-cue" data-ui-icon="rotate-ccw">
+        <strong id="trustReturnNote">Support available for delivery and return concerns.</strong>
+        <span>Contact support quickly from your order history page.</span>
+      </div>
+    </div>
   </div>
 </div>
 <div id="orderConfetti" class="order-confetti" aria-hidden="true"></div>
@@ -264,17 +316,16 @@
   </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="firebase-config.js?v=20260302"></script>
-<script src="auth-service.js?v=20260302"></script>
-<script src="firebase-auth-helpers.js?v=20260302"></script>
-<script src="firebase-db.js?v=20260302"></script>
-<script src="checkout.js?v=20260302"></script>
-<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-<script src="icons.js?v=20260304icons1"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script defer src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script defer src="firebase-config.js?v=20260302"></script>
+<script defer src="auth-service.js?v=20260302"></script>
+<script defer src="firebase-auth-helpers.js?v=20260302"></script>
+<script defer src="firebase-db.js?v=20260302"></script>
+<script defer src="checkout.js?v=20260305ux2"></script>
+<script defer src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script defer src="icons.js?v=20260304icons1"></script>
 </body>
 </html>
-

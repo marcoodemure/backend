@@ -202,7 +202,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     commentInput.disabled = !canWrite;
     sendCommentBtn.disabled = !canWrite;
     starPicker.querySelectorAll("button").forEach((button) => {
-      button.disabled = !canWrite;
+      button.disabled = false;
+      button.classList.toggle("is-auth-locked", !canWrite);
     });
     composeHint.textContent = hintText || (canWrite ? "You can post comments now." : "Sign in to comment.");
   }
@@ -530,10 +531,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateCharCounter();
   setComposeEnabled(false, "Checking sign-in status...");
 
-  starPicker.querySelectorAll("button").forEach((button) => {
-    button.addEventListener("click", () => {
-      setSelectedRating(button.getAttribute("data-rating"));
-    });
+  starPicker.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest("button[data-rating]");
+    if (!button || !starPicker.contains(button)) return;
+    setSelectedRating(button.getAttribute("data-rating"));
   });
 
   commentInput.addEventListener("input", () => {

@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const productTagsInput = document.getElementById("productTagsInput");
   const saveProductBtn = document.getElementById("saveProductBtn");
   const clearProductBtn = document.getElementById("clearProductBtn");
+  const productFormHelp = document.getElementById("productFormHelp");
   const productFormStatus = document.getElementById("productFormStatus");
   const productLinkResult = document.getElementById("productLinkResult");
   const productLinkInput = document.getElementById("productLinkInput");
@@ -177,6 +178,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let allDonations = [];
   let backendAnalyticsSummary = null;
   let savingProduct = false;
+  let editingProductOriginalId = null;
   let savingOrder = false;
   let currentUserRole = "";
   let deferredListenersTimer = null;
@@ -650,9 +652,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  function refreshProductFormMode() {
+    const originalId = Number(editingProductOriginalId);
+    const isEditing = Number.isFinite(originalId) && originalId > 0;
+    if (productForm) {
+      productForm.classList.toggle("is-editing", isEditing);
+    }
+    if (saveProductBtn) {
+      saveProductBtn.textContent = isEditing ? "Save Changes" : "Save Product";
+    }
+    if (productFormHelp) {
+      productFormHelp.textContent = isEditing
+        ? `Editing product #${originalId}. Update fields below, then click Save Changes.`
+        : "Create a new product, or click Edit in Inventory Manager to update an existing product.";
+    }
+  }
+
   function resetProductForm(options) {
     const keepLink = Boolean(options?.keepLink);
     productForm.reset();
+    editingProductOriginalId = null;
     productIdInput.readOnly = false;
     productCategoryInput.value = "";
     productTagsInput.value = "";
@@ -661,6 +680,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       productLinkInput.value = "";
       openProductLinkBtn.href = "#";
     }
+    refreshProductFormMode();
   }
 
   function resetOrderForm() {
@@ -674,8 +694,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function fillProductForm(product) {
+    if (!product) return;
+    const safeId = Number(product.id);
+    editingProductOriginalId = Number.isFinite(safeId) && safeId > 0 ? safeId : null;
+    switchAdminTab("products");
     productIdInput.value = product.id;
-    productIdInput.readOnly = true;
+    productIdInput.readOnly = false;
     productNameInput.value = product.name || "";
     productSizeInput.value = product.size || "";
     productPriceInput.value = Number(product.price || 0);
@@ -683,7 +707,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     productStockInput.value = Number(product.stock || 0);
     productCategoryInput.value = product.category || "";
     productTagsInput.value = Array.isArray(product.tags) ? product.tags.join(", ") : "";
+    refreshProductFormMode();
+    setProductFormStatus(`Editing product #${product.id}. You can also change product ID before saving.`, "info");
     showProductLink(product.id);
+    if (typeof productForm?.scrollIntoView === "function") {
+      productForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setTimeout(() => {
+      if (typeof productIdInput.focus === "function") {
+        productIdInput.focus();
+      }
+    }, 160);
   }
 
   async function renderUserPanel(user) {
@@ -1953,6 +1987,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   clearProductBtn.addEventListener("click", () => resetProductForm());
+  refreshProductFormMode();
 
   if (adminLowStockThresholdInput) {
     adminLowStockThresholdInput.value = String(lowStockThreshold);
@@ -2056,6 +2091,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (savingProduct) return;
 
+    const originalProductId = Number(editingProductOriginalId);
+    const isEditingProduct = Number.isFinite(originalProductId) && originalProductId > 0;
     const id = Number(productIdInput.value);
     const name = productNameInput.value.trim();
     const size = productSizeInput.value.trim();
@@ -2102,6 +2139,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         throw roleErr;
       }
 
+      if (
+        isEditingProduct
+        && id !== originalProductId
+        && typeof appDb.getProductById === "function"
+      ) {
+        const existingTarget = await appDb.getProductById(id);
+        if (existingTarget && existingTarget.isActive !== false) {
+          const shouldOverwrite = window.confirm(`Product ID #${id} already exists. Replace #${id} and archive #${originalProductId}?`);
+          if (!shouldOverwrite) {
+            setProductFormStatus("Choose a different Product ID or keep the current one.", "info");
+            savingProduct = false;
+            if (saveProductBtn) saveProductBtn.disabled = false;
+            return;
+          }
+        }
+      }
+
       console.log("Attempting to save product", { id, name, uid: sessionUser.uid });
       const savePromise = appDb.upsertProduct({
         id,
@@ -2145,10 +2199,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       currentUserRole = "admin";
       writeCachedRole(sessionUser.uid, "admin");
 
+      if (isEditingProduct && id !== originalProductId) {
+        await appDb.deleteProduct(originalProductId);
+      }
+
+      const successMessage = isEditingProduct
+        ? (id === originalProductId
+          ? `Updated product #${id}.`
+          : `Updated product #${originalProductId} and moved to #${id}.`)
+        : `Saved product #${id}.`;
+
       resetProductForm({ keepLink: true });
       showProductLink(id);
-      showToast(`Saved product #${id}.`, "success");
-      setProductFormStatus(`Saved product #${id}.`, "success");
+      showToast(successMessage, "success");
+      setProductFormStatus(successMessage, "success");
     } catch (error) {
       console.error("Failed to save product", error);
       const message = error?.code === "permission-denied"
