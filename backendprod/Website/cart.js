@@ -277,7 +277,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     return hydrateWithProducts(items);
   }
 
-  async function refreshCart() {
+  function renderLoadingState() {
+    if (!cartList) return;
+    if (cartToolbar) cartToolbar.classList.add("hidden");
+    cartList.innerHTML = `
+      <div class="cart-loading-list" aria-hidden="true">
+        <div class="skeleton-row">
+          <div class="skeleton-line w-80"></div>
+          <div class="skeleton-line w-55"></div>
+          <div class="skeleton-line w-40"></div>
+        </div>
+        <div class="skeleton-row">
+          <div class="skeleton-line w-80"></div>
+          <div class="skeleton-line w-55"></div>
+          <div class="skeleton-line w-40"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function refreshCart(options) {
+    if (!options?.skipLoading) {
+      renderLoadingState();
+    }
     cartItems = await loadCartItems();
     syncPrimaryLocalCart(cartItems);
     const currentIds = new Set(cartItems.map((item) => item.productId));
@@ -325,13 +347,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         <strong>${formatMoney(totalSelectedAmount)}</strong>
       </div>
       <div class="cart-items-wrap">
-        ${cartItems.map((item) => `
-          <div class="cart-item" data-product-id="${item.productId}">
+        ${cartItems.map((item, index) => `
+          <div class="cart-item cart-item-enter" style="--cart-item-index:${index};" data-product-id="${item.productId}">
             <label class="cart-item-check">
               <input type="checkbox" data-cart-select-id="${item.productId}" ${selectedProductIds.has(item.productId) ? "checked" : ""}>
             </label>
             <div class="cart-item-image-wrap">
-              ${item.productImage ? `<img src="${item.productImage}" alt="${item.productName}">` : `<div class="cart-item-image-placeholder">No image</div>`}
+              ${item.productImage ? `<img src="${item.productImage}" alt="${item.productName}" loading="lazy" decoding="async">` : `<div class="cart-item-image-placeholder">No image</div>`}
             </div>
             <div class="cart-item-info">
               <div class="cart-item-name">${item.productName}</div>
@@ -417,7 +439,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           });
         }
       }
-      await refreshCart();
+      await refreshCart({ skipLoading: true });
     } catch (error) {
       console.error("cart.js: quantity update failed", error);
       setFeedback("error", "Failed to update cart quantity.");
@@ -449,7 +471,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else if (typeof appDb.clearCart === "function") {
         await appDb.clearCart(currentUser.uid);
       }
-      await refreshCart();
+      await refreshCart({ skipLoading: true });
     } catch (error) {
       cartItems = previousItems;
       syncPrimaryLocalCart(cartItems);
@@ -468,7 +490,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const queue = selectedItems.map((item) => ({
       productId: item.productId,
-      quantity: toQty(item.quantity)
+      quantity: toQty(item.quantity),
+      productName: item.productName || `Product #${item.productId}`,
+      productSize: item.productSize || "",
+      productImage: item.productImage || "",
+      unitPrice: Number(item.unitPrice) || 0
     }));
     saveQueue(queue);
 

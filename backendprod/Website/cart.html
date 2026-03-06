@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Cart</title>
-<link rel="stylesheet" href="style.css?v=20260305mobile5">
+<link rel="stylesheet" href="style.css?v=20260306multi1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -66,6 +66,25 @@
     background: #ffffff;
     border: 1px solid #e5e7eb;
     box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
+  }
+
+  .cart-item-enter {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: cartItemEnter 0.32s ease forwards;
+    animation-delay: calc(var(--cart-item-index, 0) * 0.045s);
+  }
+
+  .cart-loading-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  @keyframes cartItemEnter {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .cart-item:hover {
@@ -184,7 +203,7 @@
 <script src="auth-service.js?v=20260302cart3"></script>
 <script src="firebase-auth-helpers.js?v=20260302cart3"></script>
 <script src="firebase-db.js?v=20260302cart3"></script>
-<script src="cart.js?v=20260302cart8"></script>
+<script src="cart.js?v=20260306multi1"></script>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="icons.js?v=20260304icons1"></script>
   <script src="iframe-auto-height.js?v=20260306a"></script>

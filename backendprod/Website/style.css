@@ -427,6 +427,22 @@ p {
   object-fit: cover;
 }
 
+.summary-image-placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 14px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 .summary-details {
   flex: 1;
 }
@@ -4562,6 +4578,25 @@ button:hover,
 .skeleton-line.w-55 { width: 55%; }
 .skeleton-line.w-80 { width: 80%; }
 
+.checkout-summary-loading {
+  display: grid;
+  gap: 10px;
+}
+
+.checkout-summary-loading-row {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: checkoutSummaryIn 0.28s ease forwards;
+  animation-delay: calc(var(--summary-row-index, 0) * 0.05s);
+}
+
+.checkout-summary-item-enter {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: checkoutSummaryIn 0.3s ease forwards;
+  animation-delay: calc(var(--summary-row-index, 0) * 0.04s);
+}
+
 *:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.5);
   outline-offset: 2px;
@@ -4569,6 +4604,13 @@ button:hover,
 
 @keyframes shimmer {
   to { background-position: -220% 0; }
+}
+
+@keyframes checkoutSummaryIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes confettiDrop {
