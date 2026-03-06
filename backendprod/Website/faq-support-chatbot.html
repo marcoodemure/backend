@@ -32,6 +32,11 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  html.compact,
+  body.compact {
+    background: transparent !important;
+  }
+
   body {
     min-height: 100vh;
     min-height: 100dvh;
@@ -310,6 +315,7 @@
     width: 100%;
     max-width: 100%;
     grid-template-columns: 1fr;
+    margin: 0;
   }
 
   body.compact .faq-panel {
@@ -318,6 +324,10 @@
 
   body.compact .chat-panel {
     min-height: 420px;
+  }
+
+  body.compact {
+    padding: 0;
   }
 
   @media (max-width: 860px) {
@@ -359,17 +369,17 @@
   <section class="panel chat-panel" aria-label="Support chatbot">
     <div class="panel-head">
       <h2>Support Assistant <span class="chip">Free</span></h2>
-      <p>Rule-based AI-style bot. Free, user-synced, and embed friendly.</p>
-      <p id="chatSyncStatus" class="sync-status">Synced user: Guest</p>
+      <p>Ask us about orders, delivery, returns, and payments.</p>
+      <p id="chatSyncStatus" class="sync-status">Chatting as: Guest</p>
     </div>
     <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
     <div id="quickRow" class="quick-row" aria-label="Quick questions"></div>
     <form id="chatForm" class="chat-form" autocomplete="off">
-      <input id="chatInput" class="chat-input" type="text" maxlength="260" placeholder="Ask about pricing, delivery, returns, payment..." />
-      <button id="chatVoiceBtn" class="chat-voice" type="button" title="Voice input">Mic</button>
+      <input id="chatInput" class="chat-input" type="text" maxlength="260" placeholder="Ask about your order, delivery, returns, or payment..." />
+      <button id="chatVoiceBtn" class="chat-voice" type="button" title="Use voice">Voice</button>
       <button id="chatSend" class="chat-send" type="submit">Send</button>
     </form>
-    <p class="chat-foot">Tip: Edit <strong>FAQ_DATA</strong> to customize answers. Signed-in users get cloud sync, realtime order updates, return flow, and support ticket actions.</p>
+    <p class="chat-foot">Tip: You can ask about tracking, delivery, returns, payments, or request help from support.</p>
   </section>
 </main>
 
@@ -453,25 +463,23 @@
     en: [
       "How much does it cost?",
       "What payment methods are available?",
-      "How long is delivery?",
-      "Track my order"
+      "How long is delivery?"
     ],
     tl: [
       "Magkano ang presyo?",
       "Anong payment methods ang available?",
-      "Gaano katagal ang delivery?",
-      "I-track ang order ko"
+      "Gaano katagal ang delivery?"
     ]
   };
 
   const I18N = {
     en: {
-      userSignedOut: "I can check live order status after you sign in. Once signed in, just ask: \"Track my order\".",
+      userSignedOut: "I can check your live order status after you sign in. Once signed in, just ask: \"Where's my order?\".",
       orderLookupUnavailable: "Order lookup is unavailable on this page right now.",
       noOrders: "I cannot find any orders for your account yet.",
-      noMoreOrders: "No more orders to show. Say \"track my order\" to refresh your latest status.",
+      noMoreOrders: "No more orders to show right now. Ask \"Where's my order?\" to refresh.",
       recentOrders: "Recent orders:",
-      showMoreOrdersHint: "Say \"show more orders\" to load more.",
+      showMoreOrdersHint: "Ask \"show more orders\" to load more.",
       allOrdersShown: "That is all recent orders I can find.",
       latestOrderHeader: "Latest order status:",
       statusLabel: "Status",
@@ -480,7 +488,7 @@
       updatedLabel: "Updated",
       estimatedDeliveryLabel: "Estimated delivery",
       latestEventLabel: "Latest event",
-      showMoreAfterSingle: "Say \"show more orders\" to view your other recent orders.",
+      showMoreAfterSingle: "Ask \"show more orders\" to view your other recent orders.",
       refineOrderHint: "Describe the order with details like product name, size, color, payment method, or order date.",
       confirmMatchHeader: "I found a possible order match:",
       confirmMatchHint: "Is this the correct order? Reply yes or no.",
@@ -489,22 +497,22 @@
       noConfidentMatch: "No problem. I could not find a confident match from that description.",
       replyYesNo: "Please reply yes or no. You can also describe the order again.",
       genericOrderFail: "I could not fetch your order status right now. Please try again in a moment.",
-      fallback: "I do not have a direct FAQ answer for that yet.\nTry asking about pricing, payment, shipping, tracking, returns, or contact support.\nFor custom help, contact {supportContact}.",
+      fallback: "I don't have that answer yet.\nTry asking about pricing, payment, shipping, tracking, returns, or support.\nFor more help, contact {supportContact}.",
       msgTooLong: "Message is too long. Keep it under 260 characters.",
       genericBotFail: "Something went wrong while preparing a reply. Please try again.",
-      cloudLocal: "Local",
-      cloudConnecting: "Cloud connecting",
-      cloudReady: "Cloud",
-      cloudError: "Cloud error",
-      syncUserLabel: "Synced user",
-      quickTrack: "Track my order",
+      cloudLocal: "Not signed in",
+      cloudConnecting: "Saving chat...",
+      cloudReady: "Chat saved",
+      cloudError: "Sync issue",
+      syncUserLabel: "Chatting as",
+      quickTrack: "Where's my order?",
       quickMore: "Show more orders",
-      quickHelp: "Need help with this order",
-      quickReturn: "Request return/refund",
+      quickHelp: "Need help with this order?",
+      quickReturn: "Start return/refund",
       quickEnglish: "English",
       quickTagalog: "Tagalog",
-      langSwitchedEn: "Language switched to English.",
-      langSwitchedTl: "Wika: Tagalog na.",
+      langSwitchedEn: "Sure, we'll continue in English.",
+      langSwitchedTl: "Sure, we'll continue in Tagalog.",
       supportNeedOrder: "Please track your order first so I know which order you need help with.",
       supportAskDetails: "Need help with this order? Please describe the issue in one message. Example: wrong size received.",
       supportCreated: "Support ticket created.\nTicket ID: {ticketId}\nWe linked this to your selected order.",
@@ -523,8 +531,8 @@
       etaDelivered: "Delivered on {date}.",
       etaCanceled: "This order is canceled.",
       etaPickup: "Pickup schedule: {date}.",
-      etaSmart: "Smart ETA: around {date}.",
-      etaAwaiting: "Smart ETA: waiting for next status update.",
+      etaSmart: "Estimated arrival: around {date}.",
+      etaAwaiting: "Estimated arrival will appear after the next status update.",
       statusPush: "Update: {item} is now {status}.\n{eta}",
       returnPush: "Return update: order {orderId} is now {status}.",
       supportPush: "Support update ({ticketId}): {status}.",
@@ -545,7 +553,7 @@
       recommendationNone: "I could not find matching products right now. Try a different budget/category/size.",
       stockAlertCreated: "Stock alert created for {product} {size}. We will notify you when it is back.",
       stockAlertFail: "I could not create the stock alert right now.",
-      compareHeader: "Latest orders comparison:",
+      compareHeader: "Recent orders comparison:",
       compareNone: "I need at least 2 orders to compare.",
       deliveryExceptionGuide: "I can help with delivery exceptions.\n1) Not received\n2) Wrong address\n3) Courier issue\nReply with one option, and I will open support immediately.",
       preferenceSaved: "Saved your preference.",
@@ -553,19 +561,19 @@
       awayAutoReply: "Support is currently in away mode. {message}\nExpected response: around {minutes} minutes.",
       voiceUnsupported: "Voice input is not supported in this browser.",
       voicePermissionFail: "Voice input failed. Please check microphone permission.",
-      inputPlaceholder: "Ask about pricing, delivery, returns, payment...",
+      inputPlaceholder: "Ask about your order, delivery, returns, or payment...",
       sendBtn: "Send",
-      micBtn: "Mic",
+      micBtn: "Voice",
       micListening: "Listening...",
-      askTrackPrompt: "Track my order"
+      askTrackPrompt: "Where's my order?"
     },
     tl: {
-      userSignedOut: "Makikita ko ang live order status kapag naka-sign in ka. Pag signed in na, sabihin mo lang: \"I-track ang order ko\".",
+      userSignedOut: "Makikita ko ang live order status mo kapag naka-sign in ka. Kapag signed in ka na, sabihin mo lang: \"Nasaan na ang order ko?\".",
       orderLookupUnavailable: "Hindi available ngayon ang order lookup sa page na ito.",
       noOrders: "Wala akong makitang orders sa account mo sa ngayon.",
-      noMoreOrders: "Wala nang ibang orders na maipapakita. Sabihin ang \"I-track ang order ko\" para mag-refresh.",
+      noMoreOrders: "Wala nang ibang orders na maipapakita ngayon. Sabihin ang \"Nasaan na ang order ko?\" para mag-refresh.",
       recentOrders: "Mga recent orders:",
-      showMoreOrdersHint: "Sabihin ang \"show more orders\" para sa iba pang orders.",
+      showMoreOrdersHint: "Sabihin ang \"show more orders\" para makita ang iba pang orders.",
       allOrdersShown: "Iyan na ang lahat ng recent orders na nahanap ko.",
       latestOrderHeader: "Pinakabagong status ng order:",
       statusLabel: "Status",
@@ -574,7 +582,7 @@
       updatedLabel: "Na-update noong",
       estimatedDeliveryLabel: "Tantyang dating",
       latestEventLabel: "Pinakahuling event",
-      showMoreAfterSingle: "Sabihin ang \"show more orders\" para makita ang iba mo pang orders.",
+      showMoreAfterSingle: "Sabihin ang \"show more orders\" para makita ang iba mo pang recent orders.",
       refineOrderHint: "Ilarawan ang order gamit ang detalye tulad ng product name, size, color, payment method, o date ng order.",
       confirmMatchHeader: "May nahanap akong posibleng tugma na order:",
       confirmMatchHint: "Ito ba ang tamang order? Sagot lang ng yes o no.",
@@ -583,22 +591,22 @@
       noConfidentMatch: "Sige. Wala akong nahanap na sapat na tugma mula sa description na iyon.",
       replyYesNo: "Mag-reply lang ng yes o no. Pwede ka ring magbigay ng bagong description.",
       genericOrderFail: "Hindi ko makuha ang order status ngayon. Pakisubukang muli mamaya.",
-      fallback: "Wala pa akong direktang FAQ answer para diyan.\nSubukan mong magtanong tungkol sa presyo, payment, shipping, tracking, returns, o support.\nPara sa custom help, kontakin ang {supportContact}.",
+      fallback: "Wala pa akong sagot diyan sa ngayon.\nSubukan mong magtanong tungkol sa presyo, payment, shipping, tracking, returns, o support.\nPara sa dagdag na tulong, kontakin ang {supportContact}.",
       msgTooLong: "Masyadong mahaba ang message. Gawing hindi lalampas sa 260 characters.",
       genericBotFail: "May error habang gumagawa ng reply. Pakisubukang muli.",
-      cloudLocal: "Local",
-      cloudConnecting: "Kumokonekta sa cloud",
-      cloudReady: "Cloud",
-      cloudError: "May cloud error",
-      syncUserLabel: "Synced user",
-      quickTrack: "I-track ang order ko",
-      quickMore: "Show more orders",
+      cloudLocal: "Hindi naka-sign in",
+      cloudConnecting: "Sine-save ang chat...",
+      cloudReady: "Naka-save ang chat",
+      cloudError: "May sync issue",
+      syncUserLabel: "Ka-chat ngayon",
+      quickTrack: "Nasaan na ang order ko?",
+      quickMore: "Ipakita pa ang orders",
       quickHelp: "Kailangan ko ng tulong sa order na ito",
       quickReturn: "Mag-request ng return/refund",
       quickEnglish: "English",
       quickTagalog: "Tagalog",
-      langSwitchedEn: "Language switched to English.",
-      langSwitchedTl: "Wika: Tagalog na.",
+      langSwitchedEn: "Sige, English na tayo.",
+      langSwitchedTl: "Sige, Tagalog na tayo.",
       supportNeedOrder: "I-track muna natin ang order mo para malaman kung aling order ang kailangan ng tulong.",
       supportAskDetails: "Need help sa order na ito? Ilarawan ang issue sa isang message. Halimbawa: maling size ang natanggap.",
       supportCreated: "Nagawa na ang support ticket.\nTicket ID: {ticketId}\nNaka-link ito sa napiling order mo.",
@@ -617,8 +625,8 @@
       etaDelivered: "Na-deliver noong {date}.",
       etaCanceled: "Kanselado ang order na ito.",
       etaPickup: "Pickup schedule: {date}.",
-      etaSmart: "Smart ETA: humigit-kumulang {date}.",
-      etaAwaiting: "Smart ETA: naghihintay ng susunod na status update.",
+      etaSmart: "Tantyang dating: humigit-kumulang {date}.",
+      etaAwaiting: "Lalabas ang tantyang dating pagkatapos ng susunod na status update.",
       statusPush: "Update: ang {item} ay {status} na.\n{eta}",
       returnPush: "Return update: ang order {orderId} ay {status} na.",
       supportPush: "Support update ({ticketId}): {status}.",
@@ -639,7 +647,7 @@
       recommendationNone: "Wala akong makitang tugmang products ngayon. Subukan ang ibang budget/category/size.",
       stockAlertCreated: "Nagawa ang stock alert para sa {product} {size}. I-no-notify ka namin kapag available na.",
       stockAlertFail: "Hindi makagawa ng stock alert ngayon.",
-      compareHeader: "Paghahambing ng latest orders:",
+      compareHeader: "Paghahambing ng recent orders:",
       compareNone: "Kailangan ko ng hindi bababa sa 2 orders para mag-compare.",
       deliveryExceptionGuide: "Makakatulong ako sa delivery exceptions.\n1) Not received\n2) Wrong address\n3) Courier issue\nMag-reply ng isang option at gagawa ako agad ng support ticket.",
       preferenceSaved: "Na-save ang preference mo.",
@@ -647,11 +655,11 @@
       awayAutoReply: "Naka-away mode ngayon ang support. {message}\nInaasahang response: mga {minutes} minuto.",
       voiceUnsupported: "Hindi supported ang voice input sa browser na ito.",
       voicePermissionFail: "Nag-fail ang voice input. Paki-check ang microphone permission.",
-      inputPlaceholder: "Magtanong tungkol sa presyo, delivery, returns, o payment...",
+      inputPlaceholder: "Magtanong tungkol sa order, delivery, returns, o payment...",
       sendBtn: "Send",
-      micBtn: "Mic",
+      micBtn: "Boses",
       micListening: "Nakikinig...",
-      askTrackPrompt: "I-track ang order ko"
+      askTrackPrompt: "Nasaan na ang order ko?"
     }
   };
 
@@ -725,6 +733,7 @@
   let botLanguage = initialLang;
 
   if (compact) {
+    document.documentElement.classList.add("compact");
     document.body.classList.add("compact");
   }
 
@@ -1009,9 +1018,12 @@
     if (syncMode === "cloud") suffix = tr("cloudReady");
     if (syncMode === "cloud_error") suffix = tr("cloudError");
 
-    let label = tr("syncUserLabel") + ": " + userLabel(activeUser) + " | " + suffix;
+    let label = tr("syncUserLabel") + ": " + userLabel(activeUser);
+    if (suffix) {
+      label += " • " + suffix;
+    }
     if (syncNote) {
-      label += " | " + syncNote;
+      label += " • " + syncNote;
     }
     chatSyncStatus.textContent = label;
   }
@@ -1021,9 +1033,9 @@
       return greetingText;
     }
     if (botLanguage === "tl") {
-      return "Hi, ako ang support assistant ng " + brandName + ". Magtanong ka lang mula sa FAQ at sasagot ako agad.";
+      return "Hi! Narito ako para tumulong sa orders, delivery, bayad, at returns ng " + brandName + ".";
     }
-    return "Hi, I am the support assistant for " + brandName + ". Ask me anything from the FAQ and I will answer instantly.";
+    return "Hi! I can help with your orders, delivery, payments, and returns for " + brandName + ".";
   }
 
   function persistHistory(options) {
@@ -1807,6 +1819,7 @@
 
     if (
       text.includes("where is my order")
+      || text.includes("where s my order")
       || text.includes("track my order")
       || text.includes("track order")
       || text.includes("order status")
@@ -1816,6 +1829,10 @@
       || text.includes("where is my package")
       || text.includes("check my order")
       || text.includes("find my order")
+      || text.includes("nasaan na ang order ko")
+      || text.includes("nasan na ang order ko")
+      || text.includes("i track ang order ko")
+      || text.includes("itrack ang order ko")
     ) {
       return true;
     }
@@ -3231,7 +3248,7 @@
     addQuickButton(tr("quickMore"), function () {
       askQuestion("show more orders");
     });
-    addQuickButton(botLanguage === "tl" ? "Compare latest orders" : "Compare latest orders", function () {
+    addQuickButton(botLanguage === "tl" ? "Ihambing ang recent orders ko" : "Compare my recent orders", function () {
       askQuestion("compare my orders");
     });
 
