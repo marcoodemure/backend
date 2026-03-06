@@ -75,6 +75,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   const adminDonationTopDonors = document.getElementById("adminDonationTopDonors");
   const adminDonationRecent = document.getElementById("adminDonationRecent");
   const adminReturnRequests = document.getElementById("adminReturnRequests");
+  const adminSupportWidgets = document.getElementById("adminSupportWidgets");
+  const adminSupportSearch = document.getElementById("adminSupportSearch");
+  const adminSupportStatusFilter = document.getElementById("adminSupportStatusFilter");
+  const adminSupportPriorityFilter = document.getElementById("adminSupportPriorityFilter");
+  const adminSupportTicketsList = document.getElementById("adminSupportTicketsList");
+  const adminSupportThreadHeader = document.getElementById("adminSupportThreadHeader");
+  const adminSupportMessages = document.getElementById("adminSupportMessages");
+  const adminSupportCannedSelect = document.getElementById("adminSupportCannedSelect");
+  const adminSupportApplyCannedBtn = document.getElementById("adminSupportApplyCannedBtn");
+  const adminSupportStatusUpdate = document.getElementById("adminSupportStatusUpdate");
+  const adminSupportPriorityUpdate = document.getElementById("adminSupportPriorityUpdate");
+  const adminSupportUpdateTicketBtn = document.getElementById("adminSupportUpdateTicketBtn");
+  const adminSupportReplyForm = document.getElementById("adminSupportReplyForm");
+  const adminSupportReplyInput = document.getElementById("adminSupportReplyInput");
+  const adminSupportSendBtn = document.getElementById("adminSupportSendBtn");
+  const adminSupportThreadStatus = document.getElementById("adminSupportThreadStatus");
+  const adminUnresolvedList = document.getElementById("adminUnresolvedList");
+  const adminSupportSettingsForm = document.getElementById("adminSupportSettingsForm");
+  const adminSupportAwayEnabled = document.getElementById("adminSupportAwayEnabled");
+  const adminSupportAwayMessage = document.getElementById("adminSupportAwayMessage");
+  const adminSupportAwayMinutes = document.getElementById("adminSupportAwayMinutes");
+  const adminSupportQuietEnabled = document.getElementById("adminSupportQuietEnabled");
+  const adminSupportQuietStart = document.getElementById("adminSupportQuietStart");
+  const adminSupportQuietEnd = document.getElementById("adminSupportQuietEnd");
+  const adminSupportQuietMessage = document.getElementById("adminSupportQuietMessage");
+  const adminSupportBroadcastActive = document.getElementById("adminSupportBroadcastActive");
+  const adminSupportBroadcastMessage = document.getElementById("adminSupportBroadcastMessage");
+  const adminSupportMaintenanceActive = document.getElementById("adminSupportMaintenanceActive");
+  const adminSupportMaintenanceMessage = document.getElementById("adminSupportMaintenanceMessage");
+  const adminSupportSettingsSaveBtn = document.getElementById("adminSupportSettingsSaveBtn");
+  const adminSupportSettingsStatus = document.getElementById("adminSupportSettingsStatus");
   const adminNotificationsList = document.getElementById("adminNotificationsList");
   const adminUnreadBadge = document.getElementById("adminUnreadBadge");
   const markAllAdminNotificationsBtn = document.getElementById("markAllAdminNotificationsBtn");
@@ -172,14 +203,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   let stopDonations = null;
   let stopReturns = null;
   let stopNotifications = null;
+  let stopSupportTickets = null;
+  let stopSupportMessages = null;
+  let stopUnresolved = null;
+  let stopSupportSettings = null;
   let listenersStarted = false;
   let allReturnRequests = [];
   let allNotifications = [];
   let allDonations = [];
+  let supportTickets = [];
+  let supportMessages = [];
+  let unresolvedQuestions = [];
+  let selectedSupportTicketId = "";
+  let supportSettingsRow = null;
   let backendAnalyticsSummary = null;
   let savingProduct = false;
   let editingProductOriginalId = null;
   let savingOrder = false;
+  let sendingSupportReply = false;
+  let savingSupportSettings = false;
   let currentUserRole = "";
   let deferredListenersTimer = null;
   let analyticsRefreshTimer = null;
@@ -260,6 +302,110 @@ document.addEventListener("DOMContentLoaded", async () => {
     return Number.isNaN(date.getTime())
       ? "N/A"
       : date.toISOString().slice(0, 10);
+  }
+
+  function toTimestamp(value) {
+    const ts = new Date(value || 0).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  }
+
+  function normalizeSupportStatus(value) {
+    const safe = String(value || "open").trim().toLowerCase();
+    if (["open", "in_progress", "pending_customer", "resolved", "closed"].includes(safe)) {
+      return safe;
+    }
+    return "open";
+  }
+
+  function normalizeSupportPriority(value) {
+    const safe = String(value || "normal").trim().toLowerCase();
+    if (["urgent", "high", "normal", "low"].includes(safe)) {
+      return safe;
+    }
+    return "normal";
+  }
+
+  function formatSupportStatusLabel(value) {
+    return normalizeSupportStatus(value).replace(/_/g, " ");
+  }
+
+  function formatSupportPriorityLabel(value) {
+    return normalizeSupportPriority(value);
+  }
+
+  function getSupportSlaSummary(ticket) {
+    const dueAt = toTimestamp(ticket?.slaDueAt);
+    if (!dueAt) {
+      return { text: "SLA: N/A", breached: false };
+    }
+    const diffMs = dueAt - Date.now();
+    const mins = Math.round(Math.abs(diffMs) / 60000);
+    const hrs = Math.floor(mins / 60);
+    const minPart = mins % 60;
+    const chunk = hrs > 0 ? `${hrs}h ${minPart}m` : `${minPart}m`;
+    if (diffMs < 0) {
+      return { text: `SLA breached by ${chunk}`, breached: true };
+    }
+    return { text: `SLA due in ${chunk}`, breached: false };
+  }
+
+  function buildSupportSearchBlob(ticket) {
+    return [
+      ticket?.id || "",
+      ticket?.requesterUid || "",
+      ticket?.requesterEmail || "",
+      ticket?.orderId || "",
+      ticket?.productName || "",
+      ticket?.summary || "",
+      ticket?.details || "",
+      ticket?.autoSummary || "",
+      ticket?.status || "",
+      ticket?.priority || "",
+      Array.isArray(ticket?.tags) ? ticket.tags.join(" ") : "",
+      Array.isArray(ticket?.fraudFlags) ? ticket.fraudFlags.join(" ") : ""
+    ].join(" ").toLowerCase();
+  }
+
+  function getFilteredSupportTickets() {
+    const query = String(adminSupportSearch?.value || "").trim().toLowerCase();
+    const statusFilter = String(adminSupportStatusFilter?.value || "all").toLowerCase();
+    const priorityFilter = String(adminSupportPriorityFilter?.value || "all").toLowerCase();
+    return supportTickets.filter((ticket) => {
+      const status = normalizeSupportStatus(ticket?.status);
+      const priority = normalizeSupportPriority(ticket?.priority);
+      if (statusFilter !== "all" && status !== statusFilter) return false;
+      if (priorityFilter !== "all" && priority !== priorityFilter) return false;
+      if (!query) return true;
+      return buildSupportSearchBlob(ticket).includes(query);
+    });
+  }
+
+  function setSupportThreadStatus(message, type) {
+    if (!adminSupportThreadStatus) return;
+    adminSupportThreadStatus.classList.remove("hidden", "is-success", "is-error", "is-info");
+    if (!message) {
+      adminSupportThreadStatus.textContent = "";
+      adminSupportThreadStatus.classList.add("hidden");
+      return;
+    }
+    adminSupportThreadStatus.textContent = message;
+    adminSupportThreadStatus.classList.add(`is-${type || "info"}`);
+  }
+
+  function setSupportSettingsStatus(message, type) {
+    if (!adminSupportSettingsStatus) return;
+    adminSupportSettingsStatus.classList.remove("hidden", "is-success", "is-error", "is-info");
+    if (!message) {
+      adminSupportSettingsStatus.textContent = "";
+      adminSupportSettingsStatus.classList.add("hidden");
+      return;
+    }
+    adminSupportSettingsStatus.textContent = message;
+    adminSupportSettingsStatus.classList.add(`is-${type || "info"}`);
+  }
+
+  function getSelectedSupportTicket() {
+    return supportTickets.find((row) => String(row?.id || "") === String(selectedSupportTicketId || "")) || null;
   }
 
   function normalizeTagList(value) {
@@ -1353,6 +1499,262 @@ document.addEventListener("DOMContentLoaded", async () => {
       adminReturnRequests.appendChild(card);
     });
   }
+
+  function renderSupportWidgets() {
+    if (!adminSupportWidgets) return;
+    const openCount = supportTickets.filter((ticket) => {
+      const status = normalizeSupportStatus(ticket?.status);
+      return status === "open" || status === "in_progress" || status === "pending_customer";
+    }).length;
+    const urgentCount = supportTickets.filter((ticket) => ["urgent", "high"].includes(normalizeSupportPriority(ticket?.priority))).length;
+    const breachedCount = supportTickets.filter((ticket) => {
+      const status = normalizeSupportStatus(ticket?.status);
+      if (status === "resolved" || status === "closed") return false;
+      return getSupportSlaSummary(ticket).breached;
+    }).length;
+    adminSupportWidgets.innerHTML = `
+      <div class="metric-card"><span class="metric-label">Open Queue</span><strong class="metric-value">${openCount}</strong></div>
+      <div class="metric-card"><span class="metric-label">Urgent/High</span><strong class="metric-value">${urgentCount}</strong></div>
+      <div class="metric-card"><span class="metric-label">SLA Breached</span><strong class="metric-value">${breachedCount}</strong></div>
+      <div class="metric-card"><span class="metric-label">Total Tickets</span><strong class="metric-value">${supportTickets.length}</strong></div>
+    `;
+  }
+
+  function syncSupportThreadControls() {
+    const ticket = getSelectedSupportTicket();
+    const hasSelected = Boolean(ticket?.id);
+    const sla = getSupportSlaSummary(ticket);
+    if (adminSupportThreadHeader) {
+      if (!hasSelected) {
+        adminSupportThreadHeader.textContent = "Select a ticket to open the realtime thread.";
+      } else {
+        adminSupportThreadHeader.textContent = `Ticket ${ticket.id} • ${ticket.requesterEmail || ticket.requesterUid || "Unknown user"} • ${sla.text}`;
+      }
+    }
+
+    if (adminSupportStatusUpdate) {
+      adminSupportStatusUpdate.disabled = !hasSelected;
+      adminSupportStatusUpdate.value = hasSelected ? normalizeSupportStatus(ticket.status) : "";
+    }
+    if (adminSupportPriorityUpdate) {
+      adminSupportPriorityUpdate.disabled = !hasSelected;
+      adminSupportPriorityUpdate.value = hasSelected ? normalizeSupportPriority(ticket.priority) : "";
+    }
+    if (adminSupportUpdateTicketBtn) {
+      adminSupportUpdateTicketBtn.disabled = !hasSelected;
+    }
+    if (adminSupportReplyInput) {
+      adminSupportReplyInput.disabled = !hasSelected;
+    }
+    if (adminSupportSendBtn) {
+      adminSupportSendBtn.disabled = !hasSelected || sendingSupportReply;
+    }
+  }
+
+  function renderSupportMessages(entries) {
+    supportMessages = Array.isArray(entries) ? entries.slice() : [];
+    if (!adminSupportMessages) return;
+
+    const ticket = getSelectedSupportTicket();
+    if (!ticket) {
+      adminSupportMessages.innerHTML = "<p>Select a ticket to see messages.</p>";
+      syncSupportThreadControls();
+      return;
+    }
+
+    if (!supportMessages.length) {
+      adminSupportMessages.innerHTML = "<p>No replies yet. Send the first admin reply.</p>";
+      syncSupportThreadControls();
+      return;
+    }
+
+    const rows = supportMessages
+      .slice()
+      .sort((a, b) => toTimestamp(a.createdAt) - toTimestamp(b.createdAt));
+    adminSupportMessages.innerHTML = "";
+    rows.forEach((row) => {
+      const card = document.createElement("div");
+      const role = String(row?.senderRole || "customer").toLowerCase() === "admin" ? "admin" : "customer";
+      card.className = `admin-support-msg ${role}`;
+      card.innerHTML = `
+        <div class="admin-support-msg-meta">
+          <strong>${escapeHtml(role === "admin" ? "Admin" : "Customer")}</strong>
+          <span>${escapeHtml(formatDateTime(row?.createdAt))}</span>
+        </div>
+        <div>${escapeHtml(row?.text || "")}</div>
+      `;
+      adminSupportMessages.appendChild(card);
+    });
+    adminSupportMessages.scrollTop = adminSupportMessages.scrollHeight;
+    syncSupportThreadControls();
+  }
+
+  function subscribeSupportMessages(ticketId) {
+    if (stopSupportMessages) {
+      try { stopSupportMessages(); } catch {}
+      stopSupportMessages = null;
+    }
+    supportMessages = [];
+    renderSupportMessages([]);
+    if (!ticketId || typeof appDb.watchSupportTicketMessages !== "function") {
+      return;
+    }
+
+    stopSupportMessages = appDb.watchSupportTicketMessages(
+      ticketId,
+      (rows) => renderSupportMessages(rows),
+      (error) => {
+        console.error("Support message listener error", error);
+        if (adminSupportMessages) {
+          adminSupportMessages.innerHTML = "<p>Failed to load ticket messages.</p>";
+        }
+      },
+      200
+    );
+  }
+
+  function renderSupportTickets(entries) {
+    if (Array.isArray(entries)) {
+      supportTickets = entries
+        .slice()
+        .sort((a, b) => toTimestamp(b.updatedAt || b.createdAt) - toTimestamp(a.updatedAt || a.createdAt));
+    }
+
+    renderSupportWidgets();
+    if (!adminSupportTicketsList) return;
+
+    const selectedStillExists = supportTickets.some((row) => String(row.id) === String(selectedSupportTicketId || ""));
+    if (!selectedStillExists) {
+      selectedSupportTicketId = "";
+      subscribeSupportMessages("");
+    }
+
+    const visible = getFilteredSupportTickets();
+    if (!selectedSupportTicketId && visible.length) {
+      selectedSupportTicketId = visible[0].id;
+      subscribeSupportMessages(selectedSupportTicketId);
+    }
+
+    if (!visible.length) {
+      adminSupportTicketsList.innerHTML = "<p>No support tickets match the current filters.</p>";
+      syncSupportThreadControls();
+      if (!selectedSupportTicketId) {
+        renderSupportMessages([]);
+      }
+      return;
+    }
+
+    adminSupportTicketsList.innerHTML = "";
+    visible.forEach((ticket) => {
+      const status = normalizeSupportStatus(ticket.status);
+      const priority = normalizeSupportPriority(ticket.priority);
+      const isActive = String(selectedSupportTicketId || "") === String(ticket.id);
+      const sla = getSupportSlaSummary(ticket);
+      const tagsText = Array.isArray(ticket.tags) && ticket.tags.length ? ticket.tags.join(", ") : "none";
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = `admin-support-ticket-card${isActive ? " active" : ""}`;
+      card.innerHTML = `
+        <div class="admin-support-ticket-meta">
+          <span class="admin-support-pill status-${status}">${escapeHtml(formatSupportStatusLabel(status))}</span>
+          <span class="admin-support-pill priority-${priority}">${escapeHtml(formatSupportPriorityLabel(priority))}</span>
+          <span class="admin-support-pill">${escapeHtml(sla.text)}</span>
+        </div>
+        <strong>${escapeHtml(ticket.summary || "Support ticket")}</strong>
+        <span>${escapeHtml(ticket.requesterEmail || ticket.requesterUid || "Unknown user")}</span>
+        <span>Order: ${escapeHtml(ticket.orderId || "N/A")} • Last: ${escapeHtml(formatDateTime(ticket.updatedAt || ticket.createdAt))}</span>
+        <span>Tags: ${escapeHtml(tagsText)}</span>
+      `;
+      card.addEventListener("click", () => {
+        selectedSupportTicketId = ticket.id;
+        subscribeSupportMessages(ticket.id);
+        renderSupportTickets();
+      });
+      adminSupportTicketsList.appendChild(card);
+    });
+    syncSupportThreadControls();
+  }
+
+  function renderUnresolvedQuestions(entries) {
+    unresolvedQuestions = Array.isArray(entries)
+      ? entries.slice().sort((a, b) => toTimestamp(b.updatedAt || b.createdAt) - toTimestamp(a.updatedAt || a.createdAt))
+      : [];
+    if (!adminUnresolvedList) return;
+
+    if (!unresolvedQuestions.length) {
+      adminUnresolvedList.innerHTML = "<p>No unresolved bot prompts right now.</p>";
+      return;
+    }
+
+    adminUnresolvedList.innerHTML = "";
+    unresolvedQuestions.forEach((entry) => {
+      const card = document.createElement("div");
+      card.className = "admin-unresolved-card";
+      card.innerHTML = `
+        <strong>${escapeHtml(entry.queryText || entry.latestQueryText || "Unknown question")}</strong>
+        <p><strong>Occurrences:</strong> ${escapeHtml(String(entry.occurrenceCount || 1))}</p>
+        <p><strong>Language:</strong> ${escapeHtml(String(entry.language || "en"))}</p>
+        <p><strong>Last seen:</strong> ${escapeHtml(formatDateTime(entry.updatedAt || entry.createdAt))}</p>
+        <div class="admin-item-actions">
+          <button type="button" class="resolveUnresolvedBtn">Mark resolved</button>
+        </div>
+      `;
+      const resolveBtn = card.querySelector(".resolveUnresolvedBtn");
+      if (resolveBtn) {
+        resolveBtn.addEventListener("click", async () => {
+          if (typeof appDb.resolveUnresolvedQuestion !== "function") {
+            showToast("Resolve API is unavailable.", "error");
+            return;
+          }
+          const actor = getCurrentUser();
+          const note = window.prompt("Resolution note (optional):") || "";
+          try {
+            await appDb.resolveUnresolvedQuestion(entry.id, {
+              resolvedNote: note,
+              resolvedBy: actor?.email || actor?.uid || "admin"
+            });
+            showToast("Marked unresolved prompt as resolved.", "success");
+          } catch (error) {
+            console.error("Failed to resolve unresolved question", error);
+            showToast("Failed to resolve prompt.", "error");
+          }
+        });
+      }
+      adminUnresolvedList.appendChild(card);
+    });
+  }
+
+  function applySupportSettings(settings) {
+    supportSettingsRow = settings || null;
+    if (adminSupportAwayEnabled) adminSupportAwayEnabled.value = settings?.awayEnabled ? "true" : "false";
+    if (adminSupportAwayMessage) adminSupportAwayMessage.value = settings?.awayMessage || "";
+    if (adminSupportAwayMinutes) adminSupportAwayMinutes.value = String(Number(settings?.awayExpectedMinutes || 0));
+    if (adminSupportQuietEnabled) adminSupportQuietEnabled.value = settings?.quietHoursEnabled ? "true" : "false";
+    if (adminSupportQuietStart) adminSupportQuietStart.value = settings?.quietHoursStart || "22:00";
+    if (adminSupportQuietEnd) adminSupportQuietEnd.value = settings?.quietHoursEnd || "07:00";
+    if (adminSupportQuietMessage) adminSupportQuietMessage.value = settings?.quietHoursMessage || "";
+    if (adminSupportBroadcastActive) adminSupportBroadcastActive.value = settings?.broadcastActive ? "true" : "false";
+    if (adminSupportBroadcastMessage) adminSupportBroadcastMessage.value = settings?.broadcastMessage || "";
+    if (adminSupportMaintenanceActive) adminSupportMaintenanceActive.value = settings?.maintenanceActive ? "true" : "false";
+    if (adminSupportMaintenanceMessage) adminSupportMaintenanceMessage.value = settings?.maintenanceMessage || "";
+  }
+
+  function readSupportSettingsFormPayload() {
+    return {
+      awayEnabled: String(adminSupportAwayEnabled?.value || "false") === "true",
+      awayMessage: String(adminSupportAwayMessage?.value || "").trim(),
+      awayExpectedMinutes: Math.max(0, Number(adminSupportAwayMinutes?.value || 0)),
+      quietHoursEnabled: String(adminSupportQuietEnabled?.value || "false") === "true",
+      quietHoursStart: String(adminSupportQuietStart?.value || "22:00"),
+      quietHoursEnd: String(adminSupportQuietEnd?.value || "07:00"),
+      quietHoursMessage: String(adminSupportQuietMessage?.value || "").trim(),
+      broadcastActive: String(adminSupportBroadcastActive?.value || "false") === "true",
+      broadcastMessage: String(adminSupportBroadcastMessage?.value || "").trim(),
+      maintenanceActive: String(adminSupportMaintenanceActive?.value || "false") === "true",
+      maintenanceMessage: String(adminSupportMaintenanceMessage?.value || "").trim()
+    };
+  }
+
   function renderProducts(products) {
     allProducts = products;
     renderProductFilterControls(products);
@@ -1765,6 +2167,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (stopDonations) stopDonations();
     if (stopReturns) stopReturns();
     if (stopNotifications) stopNotifications();
+    if (stopSupportTickets) stopSupportTickets();
+    if (stopSupportMessages) stopSupportMessages();
+    if (stopUnresolved) stopUnresolved();
+    if (stopSupportSettings) stopSupportSettings();
     if (deferredListenersTimer) clearTimeout(deferredListenersTimer);
     if (analyticsRefreshTimer) clearTimeout(analyticsRefreshTimer);
     stopProducts = null;
@@ -1773,12 +2179,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     stopDonations = null;
     stopReturns = null;
     stopNotifications = null;
+    stopSupportTickets = null;
+    stopSupportMessages = null;
+    stopUnresolved = null;
+    stopSupportSettings = null;
     deferredListenersTimer = null;
     analyticsRefreshTimer = null;
     analyticsRefreshInFlight = false;
     analyticsRefreshQueued = false;
     lastAnalyticsRefreshAt = 0;
     allDonations = [];
+    supportTickets = [];
+    supportMessages = [];
+    unresolvedQuestions = [];
+    selectedSupportTicketId = "";
+    supportSettingsRow = null;
     listenersStarted = false;
   }
 
@@ -1840,6 +2255,49 @@ document.addEventListener("DOMContentLoaded", async () => {
       );
     } else if (adminNotificationsList) {
       adminNotificationsList.innerHTML = "<p>Notification API is not available.</p>";
+    }
+
+    if (typeof appDb.watchSupportTickets === "function") {
+      stopSupportTickets = appDb.watchSupportTickets(
+        (rows) => renderSupportTickets(rows),
+        (error) => {
+          console.error("Support ticket listener error", error);
+          if (adminSupportTicketsList) {
+            adminSupportTicketsList.innerHTML = "<p>Failed to load support ticket queue.</p>";
+          }
+        },
+        { limitCount: 240 }
+      );
+    } else if (adminSupportTicketsList) {
+      adminSupportTicketsList.innerHTML = "<p>Support ticket API is not available.</p>";
+    }
+
+    if (typeof appDb.watchUnresolvedQuestions === "function") {
+      stopUnresolved = appDb.watchUnresolvedQuestions(
+        (rows) => renderUnresolvedQuestions(rows),
+        (error) => {
+          console.error("Unresolved queue listener error", error);
+          if (adminUnresolvedList) {
+            adminUnresolvedList.innerHTML = "<p>Failed to load unresolved queue.</p>";
+          }
+        },
+        120
+      );
+    } else if (adminUnresolvedList) {
+      adminUnresolvedList.innerHTML = "<p>Unresolved queue API is not available.</p>";
+    }
+
+    if (typeof appDb.watchSupportSettings === "function") {
+      stopSupportSettings = appDb.watchSupportSettings(
+        (settings) => applySupportSettings(settings),
+        (error) => {
+          console.error("Support settings listener error", error);
+          setSupportSettingsStatus("Failed to load support settings.", "error");
+        },
+        "global"
+      );
+    } else {
+      setSupportSettingsStatus("Support settings API is not available.", "error");
     }
   }
 
@@ -2011,6 +2469,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (adminOrdersPagination) adminOrdersPagination.innerHTML = "";
     }
     setSkeleton(adminReturnRequests, 3);
+    setSkeleton(adminSupportTicketsList, 4);
+    setSkeleton(adminUnresolvedList, 3);
+    if (adminSupportMessages) adminSupportMessages.innerHTML = "<p>Select a ticket to see messages.</p>";
+    if (adminSupportWidgets) setSkeleton(adminSupportWidgets, 4);
     startRealtimeListeners(resolvedUser);
   }
 
@@ -2408,6 +2870,124 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (adminTagFilter) adminTagFilter.addEventListener("input", () => renderProducts(allProducts));
   if (adminMinPriceFilter) adminMinPriceFilter.addEventListener("input", () => renderProducts(allProducts));
   if (adminMaxPriceFilter) adminMaxPriceFilter.addEventListener("input", () => renderProducts(allProducts));
+  if (adminSupportSearch) adminSupportSearch.addEventListener("input", () => renderSupportTickets());
+  if (adminSupportStatusFilter) adminSupportStatusFilter.addEventListener("change", () => renderSupportTickets());
+  if (adminSupportPriorityFilter) adminSupportPriorityFilter.addEventListener("change", () => renderSupportTickets());
+  if (adminSupportApplyCannedBtn) {
+    adminSupportApplyCannedBtn.addEventListener("click", () => {
+      const canned = String(adminSupportCannedSelect?.value || "").trim();
+      if (!canned || !adminSupportReplyInput) return;
+      if (adminSupportReplyInput.value.trim()) {
+        adminSupportReplyInput.value = `${adminSupportReplyInput.value.trim()}\n\n${canned}`;
+      } else {
+        adminSupportReplyInput.value = canned;
+      }
+      adminSupportReplyInput.focus();
+    });
+  }
+  if (adminSupportUpdateTicketBtn) {
+    adminSupportUpdateTicketBtn.addEventListener("click", async () => {
+      const ticket = getSelectedSupportTicket();
+      if (!ticket?.id || typeof appDb.updateSupportTicket !== "function") {
+        showToast("Select a ticket first.", "error");
+        return;
+      }
+      const actor = getCurrentUser();
+      const nextStatus = normalizeSupportStatus(adminSupportStatusUpdate?.value || ticket.status);
+      const nextPriority = normalizeSupportPriority(adminSupportPriorityUpdate?.value || ticket.priority);
+      const dueHours = nextPriority === "urgent" ? 1 : nextPriority === "high" ? 4 : nextPriority === "low" ? 48 : 24;
+      const nextSlaDueAt = (nextStatus === "resolved" || nextStatus === "closed")
+        ? (ticket.slaDueAt || "")
+        : new Date(Date.now() + dueHours * 60 * 60 * 1000).toISOString();
+      try {
+        await appDb.updateSupportTicket(ticket.id, {
+          status: nextStatus,
+          priority: nextPriority,
+          slaDueAt: nextSlaDueAt,
+          assignedAdminUid: actor?.uid || "",
+          assignedAdminEmail: actor?.email || "",
+          handoffRequested: false
+        });
+        setSupportThreadStatus("Ticket updated.", "success");
+        showToast("Support ticket updated.", "success");
+      } catch (error) {
+        console.error("Failed to update support ticket", error);
+        setSupportThreadStatus("Failed to update ticket.", "error");
+        showToast("Failed to update support ticket.", "error");
+      }
+    });
+  }
+  if (adminSupportReplyForm) {
+    adminSupportReplyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (sendingSupportReply) return;
+      const ticket = getSelectedSupportTicket();
+      const actor = getCurrentUser();
+      const text = String(adminSupportReplyInput?.value || "").trim();
+      if (!ticket?.id) {
+        setSupportThreadStatus("Select a ticket first.", "error");
+        return;
+      }
+      if (!text) {
+        setSupportThreadStatus("Reply message is empty.", "error");
+        return;
+      }
+      if (typeof appDb.sendSupportTicketMessage !== "function") {
+        setSupportThreadStatus("Support reply API is unavailable.", "error");
+        return;
+      }
+
+      sendingSupportReply = true;
+      if (adminSupportSendBtn) adminSupportSendBtn.disabled = true;
+      setSupportThreadStatus("Sending reply...", "info");
+      try {
+        await appDb.sendSupportTicketMessage(ticket.id, {
+          requesterUid: ticket.requesterUid || "",
+          senderUid: actor?.uid || "",
+          senderEmail: actor?.email || "",
+          senderRole: "admin",
+          text,
+          nextStatus: normalizeSupportStatus(adminSupportStatusUpdate?.value || "pending_customer")
+        });
+        if (adminSupportReplyInput) adminSupportReplyInput.value = "";
+        setSupportThreadStatus("Reply sent.", "success");
+      } catch (error) {
+        console.error("Failed to send support reply", error);
+        setSupportThreadStatus("Failed to send reply.", "error");
+      } finally {
+        sendingSupportReply = false;
+        if (adminSupportSendBtn) adminSupportSendBtn.disabled = false;
+      }
+    });
+  }
+  if (adminSupportSettingsForm) {
+    adminSupportSettingsForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (savingSupportSettings) return;
+      if (typeof appDb.setSupportSettings !== "function") {
+        setSupportSettingsStatus("Support settings API is unavailable.", "error");
+        return;
+      }
+      const actor = getCurrentUser();
+      const payload = readSupportSettingsFormPayload();
+      payload.updatedBy = actor?.email || actor?.uid || "admin";
+      savingSupportSettings = true;
+      if (adminSupportSettingsSaveBtn) adminSupportSettingsSaveBtn.disabled = true;
+      setSupportSettingsStatus("Saving support settings...", "info");
+      try {
+        await appDb.setSupportSettings(payload, "global");
+        setSupportSettingsStatus("Support settings saved.", "success");
+        showToast("Support settings saved.", "success");
+      } catch (error) {
+        console.error("Failed to save support settings", error);
+        setSupportSettingsStatus("Failed to save support settings.", "error");
+        showToast("Failed to save support settings.", "error");
+      } finally {
+        savingSupportSettings = false;
+        if (adminSupportSettingsSaveBtn) adminSupportSettingsSaveBtn.disabled = false;
+      }
+    });
+  }
   if (exportOrdersCsvBtn) exportOrdersCsvBtn.addEventListener("click", exportOrdersAsCsv);
 
   if (adminOrdersPagination) {
@@ -2431,6 +3011,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     switchAdminTab("overview");
   }
+
+  syncSupportThreadControls();
+  applySupportSettings(null);
 
   // initial admin access check using resolved sign-in state
   await handleAdminAccess(signedIn, "");

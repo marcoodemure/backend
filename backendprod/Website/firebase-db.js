@@ -2843,6 +2843,186 @@
     return updatedOrder;
   }
 
+  async function applyOrderSelfServiceAction(uid, orderId, payload) {
+    const db = getDbInstance();
+    if (!db || !uid || !orderId) {
+      return null;
+    }
+
+    const action = sanitizeString(payload?.action, "").toLowerCase();
+    const actorEmail = sanitizeString(payload?.actorEmail, "");
+    const reason = sanitizeString(payload?.reason, "");
+    const orderRef = db.collection("users").doc(uid).collection("orders").doc(orderId);
+    let statusBefore = "pending";
+    let statusAfter = "pending";
+
+    await db.runTransaction(async (transaction) => {
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists) {
+        const missingErr = new Error("order_not_found");
+        missingErr.code = "order_not_found";
+        throw missingErr;
+      }
+
+      const order = mapOrder(orderSnap);
+      const nowIso = new Date().toISOString();
+      const currentStatus = sanitizeMethod(order.status, "pending");
+      statusBefore = currentStatus;
+      let nextStatus = currentStatus;
+      let changed = false;
+      const patch = {
+        updatedAt: getServerTimestamp()
+      };
+      let note = "";
+
+      if (action === "cancel_order") {
+        if (currentStatus !== "pending") {
+          const statusErr = new Error("invalid_order_action_status_transition");
+          statusErr.code = "invalid_order_action_status_transition";
+          statusErr.meta = { action, status: currentStatus };
+          throw statusErr;
+        }
+        nextStatus = "canceled";
+        patch.status = "canceled";
+        note = reason || "Canceled by customer via support chat";
+        changed = true;
+      } else if (action === "change_contact") {
+        const contactEmail = sanitizeString(payload?.contactEmail, "");
+        if (!contactEmail) {
+          const payloadErr = new Error("invalid_order_action_payload");
+          payloadErr.code = "invalid_order_action_payload";
+          payloadErr.meta = { action };
+          throw payloadErr;
+        }
+        if (["delivered", "canceled"].includes(currentStatus)) {
+          const statusErr = new Error("invalid_order_action_status_transition");
+          statusErr.code = "invalid_order_action_status_transition";
+          statusErr.meta = { action, status: currentStatus };
+          throw statusErr;
+        }
+        if (contactEmail !== sanitizeString(order.contactEmail, "")) {
+          patch.contactEmail = contactEmail;
+          note = reason || "Contact email updated by customer";
+          changed = true;
+        }
+      } else if (action === "change_address") {
+        if (!["pending", "in_transit"].includes(currentStatus)) {
+          const statusErr = new Error("invalid_order_action_status_transition");
+          statusErr.code = "invalid_order_action_status_transition";
+          statusErr.meta = { action, status: currentStatus };
+          throw statusErr;
+        }
+
+        const source = payload?.shippingAddress && typeof payload.shippingAddress === "object"
+          ? payload.shippingAddress
+          : {};
+        const nextAddress = {
+          country: sanitizeString(source.country, order.shippingAddress?.country || ""),
+          firstName: sanitizeString(source.firstName, order.shippingAddress?.firstName || ""),
+          lastName: sanitizeString(source.lastName, order.shippingAddress?.lastName || ""),
+          company: sanitizeString(source.company, order.shippingAddress?.company || ""),
+          addressLine1: sanitizeString(source.addressLine1, order.shippingAddress?.addressLine1 || ""),
+          addressLine2: sanitizeString(source.addressLine2, order.shippingAddress?.addressLine2 || ""),
+          postalCode: sanitizeString(source.postalCode, order.shippingAddress?.postalCode || ""),
+          city: sanitizeString(source.city, order.shippingAddress?.city || ""),
+          province: sanitizeString(source.province, order.shippingAddress?.province || ""),
+          phone: sanitizeString(source.phone, order.shippingAddress?.phone || "")
+        };
+        const oldAddress = order.shippingAddress || {};
+        const oldKey = JSON.stringify(oldAddress);
+        const nextKey = JSON.stringify(nextAddress);
+        if (oldKey !== nextKey) {
+          patch.shippingAddress = nextAddress;
+          patch.shippingLocationConfirmed = false;
+          patch.deliveryConfidence = computeDeliveryConfidence({
+            shippingAddress: nextAddress,
+            shippingLocation: order.shippingLocation,
+            shippingLocationSnapshot: order.shippingLocationSnapshot,
+            shippingLocationConfirmed: false
+          });
+          patch.deliveryProof = buildDeliveryProofBundle({
+            shippingAddress: nextAddress,
+            shippingLocation: order.shippingLocation,
+            shippingLocationSnapshot: order.shippingLocationSnapshot,
+            shippingLocationConfirmed: false,
+            deliveryProof: order.deliveryProof
+          });
+          note = reason || "Shipping address updated by customer";
+          changed = true;
+        }
+      } else {
+        const actionErr = new Error("invalid_order_action");
+        actionErr.code = "invalid_order_action";
+        actionErr.meta = { action };
+        throw actionErr;
+      }
+
+      statusAfter = nextStatus;
+
+      if (!changed) {
+        const noChangeErr = new Error("order_action_no_changes");
+        noChangeErr.code = "order_action_no_changes";
+        noChangeErr.meta = { action };
+        throw noChangeErr;
+      }
+
+      const nextStatusHistory = [
+        ...(Array.isArray(order.statusHistory) ? order.statusHistory : []),
+        {
+          status: nextStatus,
+          note,
+          actorEmail,
+          source: "self_service",
+          createdAt: nowIso
+        }
+      ];
+      patch.statusHistory = nextStatusHistory;
+
+      if (action === "cancel_order") {
+        patch.deliveryProof = {
+          ...(order.deliveryProof && typeof order.deliveryProof === "object" ? order.deliveryProof : {}),
+          timeline: [
+            ...(Array.isArray(order.deliveryProof?.timeline) ? order.deliveryProof.timeline : []),
+            {
+              action: "customer_cancel_requested",
+              note,
+              actor: actorEmail,
+              createdAt: nowIso
+            }
+          ]
+        };
+      }
+
+      transaction.set(orderRef, patch, { merge: true });
+    });
+
+    const updatedSnap = await orderRef.get();
+    const updatedOrder = mapOrder(updatedSnap);
+
+    await logOrderAudit({
+      orderId,
+      orderUid: uid,
+      eventType: "order_self_service_action",
+      previousStatus: statusBefore,
+      nextStatus: statusAfter,
+      actorUid: sanitizeString(payload?.actorUid, uid),
+      actorEmail,
+      actorRole: "customer",
+      source: "support_chatbot",
+      message: sanitizeString(reason, action || "self_service"),
+      meta: {
+        action,
+        changedFields: {
+          status: action === "cancel_order",
+          contactEmail: action === "change_contact",
+          shippingAddress: action === "change_address"
+        }
+      }
+    }).catch(() => {});
+
+    return updatedOrder;
+  }
+
   async function createReturnRequest(payload) {
     const db = getDbInstance();
     if (!db) {
@@ -3155,6 +3335,705 @@
       );
   }
 
+  function mapSupportTicket(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      requesterUid: sanitizeString(data.requesterUid, ""),
+      requesterEmail: sanitizeString(data.requesterEmail, ""),
+      orderId: sanitizeString(data.orderId, ""),
+      orderUid: sanitizeString(data.orderUid, ""),
+      orderStatus: sanitizeString(data.orderStatus, ""),
+      productName: sanitizeString(data.productName, ""),
+      summary: sanitizeString(data.summary, ""),
+      details: sanitizeString(data.details, ""),
+      autoSummary: sanitizeString(data.autoSummary, ""),
+      source: sanitizeString(data.source, "chatbot"),
+      status: sanitizeString(data.status, "open"),
+      priority: sanitizeString(data.priority, "normal"),
+      tags: sanitizeTagList(data.tags),
+      fraudFlags: sanitizeTagList(data.fraudFlags),
+      slaDueAt: normalizeDateValue(data.slaDueAt),
+      handoffRequested: Boolean(data.handoffRequested),
+      assignedAdminUid: sanitizeString(data.assignedAdminUid, ""),
+      assignedAdminEmail: sanitizeString(data.assignedAdminEmail, ""),
+      lastMessageAt: normalizeDateValue(data.lastMessageAt),
+      lastMessagePreview: sanitizeString(data.lastMessagePreview, ""),
+      createdAt: normalizeDateValue(data.createdAt),
+      updatedAt: normalizeDateValue(data.updatedAt)
+    };
+  }
+
+  function mapSupportTicketMessage(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      ticketId: sanitizeString(data.ticketId, ""),
+      requesterUid: sanitizeString(data.requesterUid, ""),
+      senderUid: sanitizeString(data.senderUid, ""),
+      senderEmail: sanitizeString(data.senderEmail, ""),
+      senderRole: sanitizeString(data.senderRole, "customer"),
+      text: sanitizeString(data.text, ""),
+      createdAt: normalizeDateValue(data.createdAt),
+      updatedAt: normalizeDateValue(data.updatedAt)
+    };
+  }
+
+  function mapUnresolvedQuestion(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      uid: sanitizeString(data.uid, ""),
+      email: sanitizeString(data.email, ""),
+      language: sanitizeString(data.language, "en"),
+      queryText: sanitizeString(data.queryText, ""),
+      normalizedQuery: sanitizeString(data.normalizedQuery, ""),
+      contextIntent: sanitizeString(data.contextIntent, ""),
+      status: sanitizeString(data.status, "open"),
+      occurrenceCount: Math.max(1, Number(data.occurrenceCount) || 1),
+      resolvedNote: sanitizeString(data.resolvedNote, ""),
+      resolvedBy: sanitizeString(data.resolvedBy, ""),
+      createdAt: normalizeDateValue(data.createdAt),
+      updatedAt: normalizeDateValue(data.updatedAt)
+    };
+  }
+
+  function mapStockAlert(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      uid: sanitizeString(data.uid, ""),
+      email: sanitizeString(data.email, ""),
+      productId: normalizeProductId(data.productId),
+      productName: sanitizeString(data.productName, ""),
+      desiredSize: sanitizeString(data.desiredSize, ""),
+      status: sanitizeString(data.status, "active"),
+      note: sanitizeString(data.note, ""),
+      notifiedAt: normalizeDateValue(data.notifiedAt),
+      createdAt: normalizeDateValue(data.createdAt),
+      updatedAt: normalizeDateValue(data.updatedAt)
+    };
+  }
+
+  function mapSupportSettings(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      awayEnabled: Boolean(data.awayEnabled),
+      awayMessage: sanitizeString(data.awayMessage, ""),
+      awayExpectedMinutes: Math.max(0, Number(data.awayExpectedMinutes) || 0),
+      quietHoursEnabled: Boolean(data.quietHoursEnabled),
+      quietHoursStart: sanitizeString(data.quietHoursStart, "22:00"),
+      quietHoursEnd: sanitizeString(data.quietHoursEnd, "07:00"),
+      quietHoursMessage: sanitizeString(data.quietHoursMessage, ""),
+      broadcastActive: Boolean(data.broadcastActive),
+      broadcastMessage: sanitizeString(data.broadcastMessage, ""),
+      maintenanceActive: Boolean(data.maintenanceActive),
+      maintenanceMessage: sanitizeString(data.maintenanceMessage, ""),
+      updatedBy: sanitizeString(data.updatedBy, ""),
+      createdAt: normalizeDateValue(data.createdAt),
+      updatedAt: normalizeDateValue(data.updatedAt)
+    };
+  }
+
+  function mapSupportPreference(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      uid: sanitizeString(data.uid, doc.id),
+      language: sanitizeString(data.language, "en"),
+      preferredContactMethod: sanitizeString(data.preferredContactMethod, ""),
+      typicalSize: sanitizeString(data.typicalSize, ""),
+      createdAt: normalizeDateValue(data.createdAt),
+      updatedAt: normalizeDateValue(data.updatedAt)
+    };
+  }
+
+  async function createSupportTicket(payload) {
+    const db = getDbInstance();
+    if (!db) {
+      return null;
+    }
+
+    const requesterUid = sanitizeString(payload?.requesterUid, "");
+    const requesterEmail = sanitizeString(payload?.requesterEmail, "");
+    const textSummary = sanitizeString(payload?.summary, "");
+    const textDetails = sanitizeString(payload?.details, "");
+    const now = getServerTimestamp();
+
+    const row = {
+      requesterUid,
+      requesterEmail,
+      orderId: sanitizeString(payload?.orderId, ""),
+      orderUid: sanitizeString(payload?.orderUid, requesterUid),
+      orderStatus: sanitizeString(payload?.orderStatus, ""),
+      productName: sanitizeString(payload?.productName, ""),
+      summary: textSummary,
+      details: textDetails,
+      autoSummary: sanitizeString(payload?.autoSummary, ""),
+      source: sanitizeString(payload?.source, "chatbot"),
+      status: sanitizeString(payload?.status, "open"),
+      priority: sanitizeString(payload?.priority, "normal"),
+      tags: sanitizeTagList(payload?.tags),
+      fraudFlags: sanitizeTagList(payload?.fraudFlags),
+      slaDueAt: payload?.slaDueAt ? new Date(payload.slaDueAt) : null,
+      handoffRequested: Boolean(payload?.handoffRequested),
+      assignedAdminUid: sanitizeString(payload?.assignedAdminUid, ""),
+      assignedAdminEmail: sanitizeString(payload?.assignedAdminEmail, ""),
+      lastMessageAt: now,
+      lastMessagePreview: textSummary || textDetails,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const ref = await db.collection("support_tickets").add(row);
+    const snap = await ref.get();
+    return mapSupportTicket(snap);
+  }
+
+  async function listSupportTickets(options) {
+    const db = getDbInstance();
+    if (!db) {
+      return [];
+    }
+
+    const safeLimit = Math.max(1, Math.min(200, Number(options?.limitCount) || 80));
+    let query = db.collection("support_tickets");
+    const status = sanitizeString(options?.status, "").toLowerCase();
+    const priority = sanitizeString(options?.priority, "").toLowerCase();
+    const requesterUid = sanitizeString(options?.requesterUid, "");
+
+    if (status) {
+      query = query.where("status", "==", status);
+    }
+    if (priority) {
+      query = query.where("priority", "==", priority);
+    }
+    if (requesterUid) {
+      query = query.where("requesterUid", "==", requesterUid);
+    }
+
+    const snapshot = await query.limit(safeLimit).get();
+    return snapshot.docs
+      .map(mapSupportTicket)
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+  }
+
+  function watchSupportTickets(onData, onError, options) {
+    const db = getDbInstance();
+    if (!db) {
+      return () => {};
+    }
+
+    const safeLimit = Math.max(1, Math.min(200, Number(options?.limitCount) || 80));
+    let query = db.collection("support_tickets");
+    const status = sanitizeString(options?.status, "").toLowerCase();
+    const priority = sanitizeString(options?.priority, "").toLowerCase();
+    const requesterUid = sanitizeString(options?.requesterUid, "");
+    if (status) query = query.where("status", "==", status);
+    if (priority) query = query.where("priority", "==", priority);
+    if (requesterUid) query = query.where("requesterUid", "==", requesterUid);
+
+    return query.limit(safeLimit).onSnapshot(
+      (snapshot) => {
+        const rows = snapshot.docs
+          .map(mapSupportTicket)
+          .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+        onData(rows);
+      },
+      (error) => {
+        if (typeof onError === "function") {
+          onError(error);
+        } else {
+          console.error("Support tickets listener failed", error);
+        }
+      }
+    );
+  }
+
+  async function updateSupportTicket(ticketId, patch) {
+    const db = getDbInstance();
+    if (!db || !ticketId) {
+      return null;
+    }
+
+    const ref = db.collection("support_tickets").doc(ticketId);
+    const payload = {
+      updatedAt: getServerTimestamp()
+    };
+
+    if (typeof patch?.status === "string") payload.status = sanitizeString(patch.status, "open");
+    if (typeof patch?.priority === "string") payload.priority = sanitizeString(patch.priority, "normal");
+    if (typeof patch?.summary === "string") payload.summary = sanitizeString(patch.summary, "");
+    if (typeof patch?.details === "string") payload.details = sanitizeString(patch.details, "");
+    if (typeof patch?.autoSummary === "string") payload.autoSummary = sanitizeString(patch.autoSummary, "");
+    if (typeof patch?.assignedAdminUid === "string") payload.assignedAdminUid = sanitizeString(patch.assignedAdminUid, "");
+    if (typeof patch?.assignedAdminEmail === "string") payload.assignedAdminEmail = sanitizeString(patch.assignedAdminEmail, "");
+    if (typeof patch?.handoffRequested === "boolean") payload.handoffRequested = patch.handoffRequested;
+    if (typeof patch?.lastMessagePreview === "string") payload.lastMessagePreview = sanitizeString(patch.lastMessagePreview, "");
+    if (patch?.lastMessageAt) payload.lastMessageAt = new Date(patch.lastMessageAt);
+    if (patch?.slaDueAt) payload.slaDueAt = new Date(patch.slaDueAt);
+    if (Array.isArray(patch?.tags)) payload.tags = sanitizeTagList(patch.tags);
+    if (Array.isArray(patch?.fraudFlags)) payload.fraudFlags = sanitizeTagList(patch.fraudFlags);
+
+    await ref.set(payload, { merge: true });
+    const snap = await ref.get();
+    return snap.exists ? mapSupportTicket(snap) : null;
+  }
+
+  async function sendSupportTicketMessage(ticketId, payload) {
+    const db = getDbInstance();
+    if (!db || !ticketId) {
+      return null;
+    }
+
+    const text = sanitizeString(payload?.text, "");
+    if (!text) {
+      return null;
+    }
+
+    const requesterUid = sanitizeString(payload?.requesterUid, "");
+    const senderRole = sanitizeString(payload?.senderRole, "customer");
+    const row = {
+      ticketId: sanitizeString(ticketId, ""),
+      requesterUid,
+      senderUid: sanitizeString(payload?.senderUid, ""),
+      senderEmail: sanitizeString(payload?.senderEmail, ""),
+      senderRole,
+      text,
+      createdAt: getServerTimestamp(),
+      updatedAt: getServerTimestamp()
+    };
+
+    const ref = await db.collection("support_ticket_messages").add(row);
+    await updateSupportTicket(ticketId, {
+      lastMessagePreview: text.slice(0, 200),
+      lastMessageAt: new Date().toISOString(),
+      status: senderRole === "admin" ? sanitizeString(payload?.nextStatus, "pending_customer") : sanitizeString(payload?.nextStatus, "in_progress")
+    }).catch(() => {});
+
+    const snap = await ref.get();
+    return mapSupportTicketMessage(snap);
+  }
+
+  async function listSupportTicketMessages(ticketId, limitCount) {
+    const db = getDbInstance();
+    if (!db || !ticketId) {
+      return [];
+    }
+
+    const safeLimit = Math.max(1, Math.min(300, Number(limitCount) || 120));
+    const snapshot = await db.collection("support_ticket_messages")
+      .where("ticketId", "==", sanitizeString(ticketId, ""))
+      .limit(safeLimit)
+      .get();
+
+    return snapshot.docs
+      .map(mapSupportTicketMessage)
+      .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+  }
+
+  function watchSupportTicketMessages(ticketId, onData, onError, limitCount) {
+    const db = getDbInstance();
+    if (!db || !ticketId) {
+      return () => {};
+    }
+
+    const safeLimit = Math.max(1, Math.min(300, Number(limitCount) || 120));
+    return db.collection("support_ticket_messages")
+      .where("ticketId", "==", sanitizeString(ticketId, ""))
+      .limit(safeLimit)
+      .onSnapshot(
+        (snapshot) => {
+          const rows = snapshot.docs
+            .map(mapSupportTicketMessage)
+            .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+          onData(rows);
+        },
+        (error) => {
+          if (typeof onError === "function") {
+            onError(error);
+          } else {
+            console.error("Support ticket messages listener failed", error);
+          }
+        }
+      );
+  }
+
+  async function queueUnresolvedQuestion(payload) {
+    const db = getDbInstance();
+    if (!db) {
+      return null;
+    }
+
+    const queryText = sanitizeString(payload?.queryText, "");
+    if (!queryText) {
+      return null;
+    }
+
+    const normalizedQuery = sanitizeString(payload?.normalizedQuery, queryText.toLowerCase());
+    const uid = sanitizeString(payload?.uid, "");
+    const ref = db.collection("unresolved_questions");
+    let existing = null;
+    if (uid) {
+      existing = await ref
+        .where("uid", "==", uid)
+        .limit(30)
+        .get();
+    } else {
+      existing = await ref
+        .where("normalizedQuery", "==", normalizedQuery)
+        .where("status", "==", "open")
+        .limit(1)
+        .get();
+    }
+
+    const existingDoc = existing.empty
+      ? null
+      : existing.docs.find((doc) => {
+        const row = doc.data() || {};
+        return sanitizeString(row.normalizedQuery, "") === normalizedQuery
+          && sanitizeString(row.status, "open") === "open";
+      }) || null;
+
+    if (existingDoc) {
+      const rowRef = existingDoc.ref;
+      const currentCount = Number(existingDoc.data()?.occurrenceCount) || 1;
+      await rowRef.set(
+        {
+          occurrenceCount: currentCount + 1,
+          updatedAt: getServerTimestamp(),
+          latestQueryText: queryText,
+          latestUid: sanitizeString(payload?.uid, ""),
+          latestEmail: sanitizeString(payload?.email, "")
+        },
+        { merge: true }
+      );
+      const latestSnap = await rowRef.get();
+      return mapUnresolvedQuestion(latestSnap);
+    }
+
+    const row = {
+      uid,
+      email: sanitizeString(payload?.email, ""),
+      language: sanitizeString(payload?.language, "en"),
+      queryText,
+      latestQueryText: queryText,
+      normalizedQuery,
+      contextIntent: sanitizeString(payload?.contextIntent, ""),
+      status: "open",
+      occurrenceCount: 1,
+      resolvedNote: "",
+      resolvedBy: "",
+      createdAt: getServerTimestamp(),
+      updatedAt: getServerTimestamp()
+    };
+
+    const createdRef = await ref.add(row);
+    const snap = await createdRef.get();
+    return mapUnresolvedQuestion(snap);
+  }
+
+  async function listUnresolvedQuestions(limitCount) {
+    const db = getDbInstance();
+    if (!db) {
+      return [];
+    }
+
+    const safeLimit = Math.max(1, Math.min(300, Number(limitCount) || 120));
+    const snapshot = await db.collection("unresolved_questions")
+      .limit(safeLimit)
+      .get();
+
+    return snapshot.docs
+      .map(mapUnresolvedQuestion)
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+  }
+
+  function watchUnresolvedQuestions(onData, onError, limitCount) {
+    const db = getDbInstance();
+    if (!db) {
+      return () => {};
+    }
+
+    const safeLimit = Math.max(1, Math.min(300, Number(limitCount) || 120));
+    return db.collection("unresolved_questions")
+      .limit(safeLimit)
+      .onSnapshot(
+        (snapshot) => {
+          const rows = snapshot.docs
+            .map(mapUnresolvedQuestion)
+            .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+          onData(rows);
+        },
+        (error) => {
+          if (typeof onError === "function") {
+            onError(error);
+          } else {
+            console.error("Unresolved question listener failed", error);
+          }
+        }
+      );
+  }
+
+  async function resolveUnresolvedQuestion(questionId, payload) {
+    const db = getDbInstance();
+    if (!db || !questionId) {
+      return null;
+    }
+
+    const ref = db.collection("unresolved_questions").doc(questionId);
+    await ref.set(
+      {
+        status: "resolved",
+        resolvedNote: sanitizeString(payload?.resolvedNote, ""),
+        resolvedBy: sanitizeString(payload?.resolvedBy, ""),
+        updatedAt: getServerTimestamp()
+      },
+      { merge: true }
+    );
+    const snap = await ref.get();
+    return snap.exists ? mapUnresolvedQuestion(snap) : null;
+  }
+
+  async function createStockAlert(payload) {
+    const db = getDbInstance();
+    if (!db) {
+      return null;
+    }
+
+    const uid = sanitizeString(payload?.uid, "");
+    if (!uid) {
+      return null;
+    }
+
+    const productId = normalizeProductId(payload?.productId);
+    const desiredSize = sanitizeString(payload?.desiredSize, "");
+    const productName = sanitizeString(payload?.productName, "");
+    if (!productId && !productName) {
+      return null;
+    }
+
+    let query = db.collection("stock_alerts")
+      .where("uid", "==", uid)
+      .where("status", "==", "active");
+    if (productId) {
+      query = query.where("productId", "==", productId);
+    } else {
+      query = query.where("productName", "==", productName);
+    }
+    const existing = await query.limit(10).get();
+    const duplicate = existing.docs.find((doc) => {
+      const row = mapStockAlert(doc);
+      return sanitizeString(row.desiredSize, "") === desiredSize;
+    });
+    if (duplicate) {
+      const snap = await duplicate.ref.get();
+      return mapStockAlert(snap);
+    }
+
+    const row = {
+      uid,
+      email: sanitizeString(payload?.email, ""),
+      productId,
+      productName: productName || sanitizeString(payload?.fallbackProductName, ""),
+      desiredSize,
+      status: "active",
+      note: sanitizeString(payload?.note, ""),
+      notifiedAt: null,
+      createdAt: getServerTimestamp(),
+      updatedAt: getServerTimestamp()
+    };
+    const ref = await db.collection("stock_alerts").add(row);
+    const snap = await ref.get();
+    return mapStockAlert(snap);
+  }
+
+  async function listStockAlerts(options) {
+    const db = getDbInstance();
+    if (!db) {
+      return [];
+    }
+
+    const safeLimit = Math.max(1, Math.min(300, Number(options?.limitCount) || 100));
+    let query = db.collection("stock_alerts");
+    const uid = sanitizeString(options?.uid, "");
+    const status = sanitizeString(options?.status, "").toLowerCase();
+    if (uid) query = query.where("uid", "==", uid);
+    if (status) query = query.where("status", "==", status);
+
+    const snapshot = await query.limit(safeLimit).get();
+    return snapshot.docs
+      .map(mapStockAlert)
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+  }
+
+  function watchStockAlerts(onData, onError, options) {
+    const db = getDbInstance();
+    if (!db) {
+      return () => {};
+    }
+
+    const safeLimit = Math.max(1, Math.min(300, Number(options?.limitCount) || 100));
+    let query = db.collection("stock_alerts");
+    const uid = sanitizeString(options?.uid, "");
+    const status = sanitizeString(options?.status, "").toLowerCase();
+    if (uid) query = query.where("uid", "==", uid);
+    if (status) query = query.where("status", "==", status);
+
+    return query.limit(safeLimit).onSnapshot(
+      (snapshot) => {
+        const rows = snapshot.docs
+          .map(mapStockAlert)
+          .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+        onData(rows);
+      },
+      (error) => {
+        if (typeof onError === "function") {
+          onError(error);
+        } else {
+          console.error("Stock alerts listener failed", error);
+        }
+      }
+    );
+  }
+
+  async function updateStockAlert(alertId, patch) {
+    const db = getDbInstance();
+    if (!db || !alertId) {
+      return null;
+    }
+
+    const ref = db.collection("stock_alerts").doc(alertId);
+    const payload = {
+      updatedAt: getServerTimestamp()
+    };
+    if (typeof patch?.status === "string") payload.status = sanitizeString(patch.status, "active");
+    if (typeof patch?.note === "string") payload.note = sanitizeString(patch.note, "");
+    if (patch?.notifiedAt) payload.notifiedAt = new Date(patch.notifiedAt);
+
+    await ref.set(payload, { merge: true });
+    const snap = await ref.get();
+    return snap.exists ? mapStockAlert(snap) : null;
+  }
+
+  async function getSupportSettings(docId) {
+    const db = getDbInstance();
+    if (!db) {
+      return null;
+    }
+
+    const ref = db.collection("support_settings").doc(sanitizeString(docId, "global") || "global");
+    const snap = await ref.get();
+    return snap.exists ? mapSupportSettings(snap) : null;
+  }
+
+  async function setSupportSettings(payload, docId) {
+    const db = getDbInstance();
+    if (!db) {
+      return null;
+    }
+
+    const now = getServerTimestamp();
+    const ref = db.collection("support_settings").doc(sanitizeString(docId, "global") || "global");
+    await ref.set(
+      {
+        awayEnabled: Boolean(payload?.awayEnabled),
+        awayMessage: sanitizeString(payload?.awayMessage, ""),
+        awayExpectedMinutes: Math.max(0, Number(payload?.awayExpectedMinutes) || 0),
+        quietHoursEnabled: Boolean(payload?.quietHoursEnabled),
+        quietHoursStart: sanitizeString(payload?.quietHoursStart, "22:00"),
+        quietHoursEnd: sanitizeString(payload?.quietHoursEnd, "07:00"),
+        quietHoursMessage: sanitizeString(payload?.quietHoursMessage, ""),
+        broadcastActive: Boolean(payload?.broadcastActive),
+        broadcastMessage: sanitizeString(payload?.broadcastMessage, ""),
+        maintenanceActive: Boolean(payload?.maintenanceActive),
+        maintenanceMessage: sanitizeString(payload?.maintenanceMessage, ""),
+        updatedBy: sanitizeString(payload?.updatedBy, ""),
+        createdAt: now,
+        updatedAt: now
+      },
+      { merge: true }
+    );
+    const snap = await ref.get();
+    return snap.exists ? mapSupportSettings(snap) : null;
+  }
+
+  function watchSupportSettings(onData, onError, docId) {
+    const db = getDbInstance();
+    if (!db) {
+      return () => {};
+    }
+
+    const ref = db.collection("support_settings").doc(sanitizeString(docId, "global") || "global");
+    return ref.onSnapshot(
+      (snap) => {
+        onData(snap.exists ? mapSupportSettings(snap) : null);
+      },
+      (error) => {
+        if (typeof onError === "function") {
+          onError(error);
+        } else {
+          console.error("Support settings listener failed", error);
+        }
+      }
+    );
+  }
+
+  async function getSupportPreference(uid) {
+    const db = getDbInstance();
+    if (!db || !uid) {
+      return null;
+    }
+
+    const ref = db.collection("support_preferences").doc(uid);
+    const snap = await ref.get();
+    return snap.exists ? mapSupportPreference(snap) : null;
+  }
+
+  async function setSupportPreference(uid, payload) {
+    const db = getDbInstance();
+    if (!db || !uid) {
+      return null;
+    }
+
+    const ref = db.collection("support_preferences").doc(uid);
+    await ref.set(
+      {
+        uid,
+        language: sanitizeString(payload?.language, "en"),
+        preferredContactMethod: sanitizeString(payload?.preferredContactMethod, ""),
+        typicalSize: sanitizeString(payload?.typicalSize, ""),
+        createdAt: getServerTimestamp(),
+        updatedAt: getServerTimestamp()
+      },
+      { merge: true }
+    );
+    const snap = await ref.get();
+    return snap.exists ? mapSupportPreference(snap) : null;
+  }
+
+  function watchSupportPreference(uid, onData, onError) {
+    const db = getDbInstance();
+    if (!db || !uid) {
+      return () => {};
+    }
+
+    const ref = db.collection("support_preferences").doc(uid);
+    return ref.onSnapshot(
+      (snap) => {
+        onData(snap.exists ? mapSupportPreference(snap) : null);
+      },
+      (error) => {
+        if (typeof onError === "function") {
+          onError(error);
+        } else {
+          console.error("Support preference listener failed", error);
+        }
+      }
+    );
+  }
+
   // Lightweight test helper to verify Firestore connectivity and basic read
   async function testConnection(timeoutMs = 10000) {
     console.log('appDb.testConnection invoked', { timeoutMs });
@@ -3284,12 +4163,34 @@
     markNotificationRead,
     markAllNotificationsRead,
     updateOrderStatus,
+    applyOrderSelfServiceAction,
     createReturnRequest,
     updateReturnRequestStatus,
     listReturnRequests,
     watchReturnRequests,
     listUserReturnRequests,
     watchUserReturnRequests,
+    createSupportTicket,
+    listSupportTickets,
+    watchSupportTickets,
+    updateSupportTicket,
+    sendSupportTicketMessage,
+    listSupportTicketMessages,
+    watchSupportTicketMessages,
+    queueUnresolvedQuestion,
+    listUnresolvedQuestions,
+    watchUnresolvedQuestions,
+    resolveUnresolvedQuestion,
+    createStockAlert,
+    listStockAlerts,
+    watchStockAlerts,
+    updateStockAlert,
+    getSupportSettings,
+    setSupportSettings,
+    watchSupportSettings,
+    getSupportPreference,
+    setSupportPreference,
+    watchSupportPreference,
     testConnection,
     testConnectionRest,
     queueEmail

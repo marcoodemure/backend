@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Admin Panel</title>
-<link rel="stylesheet" href="style.css?v=20260305mobile5">
+<link rel="stylesheet" href="style.css?v=20260306support1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -34,6 +34,7 @@
       <button type="button" class="admin-tab-btn" data-admin-tab-target="orders" aria-selected="false" data-ui-icon="package">Orders</button>
       <button type="button" class="admin-tab-btn" data-admin-tab-target="donations" aria-selected="false" data-ui-icon="hand-heart">Donations</button>
       <button type="button" class="admin-tab-btn" data-admin-tab-target="returns" aria-selected="false" data-ui-icon="rotate-ccw">Returns</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab-target="support" aria-selected="false" data-ui-icon="messages-square">Support</button>
     </div>
 
     <div class="admin-tab-panel active" data-admin-tab-panel="overview">
@@ -249,6 +250,126 @@
         <div id="adminReturnRequests" class="admin-list"></div>
       </section>
     </div>
+
+    <div class="admin-tab-panel" data-admin-tab-panel="support">
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2 data-ui-icon="messages-square">Live Support Queue</h2>
+          <span class="admin-badge">Realtime handoff</span>
+        </div>
+        <div id="adminSupportWidgets" class="admin-metrics"></div>
+        <div class="admin-tools-row">
+          <input id="adminSupportSearch" type="text" placeholder="Search ticket by user, order, summary, details, tag">
+          <select id="adminSupportStatusFilter">
+            <option value="all">All statuses</option>
+            <option value="open">Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="pending_customer">Pending customer</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+          <select id="adminSupportPriorityFilter">
+            <option value="all">All priorities</option>
+            <option value="urgent">Urgent</option>
+            <option value="high">High</option>
+            <option value="normal">Normal</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div class="admin-support-layout">
+          <div class="admin-support-col">
+            <div id="adminSupportTicketsList" class="admin-list"></div>
+          </div>
+          <div class="admin-support-col">
+            <div id="adminSupportThreadHeader" class="admin-support-thread-head">Select a ticket to open the realtime thread.</div>
+            <div id="adminSupportMessages" class="admin-support-messages"></div>
+            <div class="admin-tools-row">
+              <select id="adminSupportCannedSelect">
+                <option value="">Canned responses</option>
+                <option value="Thanks for reaching out. I am checking this now and will update you shortly.">Acknowledged and checking</option>
+                <option value="I have escalated this to our operations team. We will update you once confirmed.">Escalated to operations</option>
+                <option value="Please share a clear photo/video and we will continue processing your request.">Ask for proof</option>
+                <option value="Your request is approved. We have started the return/refund processing flow.">Return approved</option>
+              </select>
+              <button id="adminSupportApplyCannedBtn" type="button" data-ui-icon="clipboard-paste">Use template</button>
+            </div>
+            <div class="admin-tools-row">
+              <select id="adminSupportStatusUpdate">
+                <option value="">Update status</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In progress</option>
+                <option value="pending_customer">Pending customer</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+              <select id="adminSupportPriorityUpdate">
+                <option value="">Update priority</option>
+                <option value="urgent">Urgent</option>
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low</option>
+              </select>
+              <button id="adminSupportUpdateTicketBtn" type="button" data-ui-icon="save">Save ticket</button>
+            </div>
+            <form id="adminSupportReplyForm" class="admin-form admin-support-reply-form" autocomplete="off">
+              <textarea id="adminSupportReplyInput" maxlength="2000" placeholder="Reply to customer..."></textarea>
+              <div class="admin-form-actions">
+                <button id="adminSupportSendBtn" type="submit" data-ui-icon="send">Send reply</button>
+              </div>
+            </form>
+            <p id="adminSupportThreadStatus" class="admin-form-status hidden"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2 data-ui-icon="brain">Unresolved Question Queue</h2>
+          <span class="admin-badge">Learning data</span>
+        </div>
+        <div id="adminUnresolvedList" class="admin-list"></div>
+      </section>
+
+      <section class="admin-card">
+        <div class="admin-card-head">
+          <h2 data-ui-icon="settings">Support Automation Settings</h2>
+          <span class="admin-badge">Away / Quiet / Broadcast</span>
+        </div>
+        <form id="adminSupportSettingsForm" class="admin-form" autocomplete="off">
+          <select id="adminSupportAwayEnabled">
+            <option value="false">Away mode: Off</option>
+            <option value="true">Away mode: On</option>
+          </select>
+          <input id="adminSupportAwayMessage" type="text" maxlength="240" placeholder="Away auto-reply message">
+          <input id="adminSupportAwayMinutes" type="number" min="0" step="5" placeholder="Expected response minutes">
+
+          <select id="adminSupportQuietEnabled">
+            <option value="false">Quiet hours: Off</option>
+            <option value="true">Quiet hours: On</option>
+          </select>
+          <input id="adminSupportQuietStart" type="time" value="22:00">
+          <input id="adminSupportQuietEnd" type="time" value="07:00">
+          <input id="adminSupportQuietMessage" type="text" maxlength="240" placeholder="Quiet-hours message">
+
+          <select id="adminSupportBroadcastActive">
+            <option value="false">Broadcast: Off</option>
+            <option value="true">Broadcast: On</option>
+          </select>
+          <input id="adminSupportBroadcastMessage" type="text" maxlength="240" placeholder="Broadcast notice for all chats">
+
+          <select id="adminSupportMaintenanceActive">
+            <option value="false">Maintenance notice: Off</option>
+            <option value="true">Maintenance notice: On</option>
+          </select>
+          <input id="adminSupportMaintenanceMessage" type="text" maxlength="240" placeholder="Maintenance notice text">
+
+          <div class="admin-form-actions">
+            <button id="adminSupportSettingsSaveBtn" type="submit" data-ui-icon="save">Save support settings</button>
+          </div>
+        </form>
+        <p id="adminSupportSettingsStatus" class="admin-form-status hidden"></p>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -268,8 +389,8 @@
 <script src="firebase-config.js?v=20260302c"></script>
 <script src="auth-service.js?v=20260302c"></script>
 <script src="firebase-auth-helpers.js?v=20260302c"></script>
-<script src="firebase-db.js?v=20260302e"></script>
-<script src="admin.js?v=20260305admin3"></script>
+<script src="firebase-db.js?v=20260306support1"></script>
+<script src="admin.js?v=20260306support1"></script>
 <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="icons.js?v=20260304icons1"></script>
 </body>

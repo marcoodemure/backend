@@ -1,0 +1,3384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ Support Chatbot</title>
+<style>
+  :root {
+    --bg: #f7f8fb;
+    --surface: #ffffff;
+    --surface-alt: #f8fafc;
+    --text: #0f172a;
+    --muted: #475569;
+    --border: #dbe3ef;
+    --brand: #0f766e;
+    --brand-soft: #d1fae5;
+    --user-bg: #dbeafe;
+    --bot-bg: #ecfeff;
+    --danger: #b91c1c;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", Arial, sans-serif;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: clamp(10px, 2.6vw, 18px);
+    box-sizing: border-box;
+  }
+
+  .support-shell {
+    width: min(100%, 900px);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: clamp(10px, 2vw, 16px);
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+  }
+
+  .panel-head {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);
+  }
+
+  .panel-head h1,
+  .panel-head h2 {
+    margin: 0;
+    font-size: clamp(14px, 2.1vw, 18px);
+    line-height: 1.25;
+  }
+
+  .panel-head p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: clamp(11px, 1.7vw, 13px);
+    line-height: 1.4;
+  }
+
+  .sync-status {
+    margin: 6px 0 0;
+    color: #0f766e;
+    font-size: 11px;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+
+  .faq-body {
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+    max-height: 560px;
+    overflow-y: auto;
+  }
+
+  details.faq-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  details.faq-item[open] {
+    background: var(--surface-alt);
+    border-color: #bfd6ee;
+  }
+
+  .faq-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 12px;
+    font-weight: 700;
+    font-size: clamp(12px, 1.8vw, 14px);
+    line-height: 1.35;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .faq-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq-chevron {
+    color: var(--brand);
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+
+  .faq-answer {
+    margin: 0;
+    padding: 0 12px 10px;
+    color: #1e293b;
+    font-size: clamp(12px, 1.8vw, 13px);
+    line-height: 1.45;
+    white-space: pre-line;
+  }
+
+  .chat-panel {
+    display: grid;
+    grid-template-rows: auto 1fr auto auto auto;
+    min-height: 480px;
+  }
+
+  .chat-messages {
+    padding: 12px;
+    background: #f8fafc;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 180px;
+    max-height: 360px;
+  }
+
+  .msg {
+    max-width: 88%;
+    border-radius: 11px;
+    padding: 9px 10px;
+    font-size: clamp(12px, 1.75vw, 13px);
+    line-height: 1.38;
+    white-space: pre-line;
+    word-wrap: break-word;
+  }
+
+  .msg.bot {
+    align-self: flex-start;
+    background: var(--bot-bg);
+    border: 1px solid #c7eef7;
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    background: var(--user-bg);
+    border: 1px solid #bfd7ff;
+    text-align: left;
+  }
+
+  .msg.error {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: var(--danger);
+  }
+
+  .typing {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .typing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #0f766e;
+    opacity: 0.35;
+    animation: typingPulse 1s infinite;
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.18s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.36s;
+  }
+
+  @keyframes typingPulse {
+    0%, 100% { opacity: 0.25; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-2px); }
+  }
+
+  .quick-row {
+    border-top: 1px solid var(--border);
+    padding: 9px 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: #ffffff;
+  }
+
+  .quick-btn {
+    border: 1px solid #bae6fd;
+    background: #ecfeff;
+    color: #0c4a6e;
+    border-radius: 999px;
+    padding: 6px 9px;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+
+  .chat-form {
+    border-top: 1px solid var(--border);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    background: #ffffff;
+  }
+
+  .chat-input {
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 9px 11px;
+    font-size: 13px;
+    min-height: 40px;
+    box-sizing: border-box;
+  }
+
+  .chat-send {
+    border: 1px solid #0f766e;
+    border-radius: 9px;
+    background: var(--brand);
+    color: #ffffff;
+    font-weight: 700;
+    padding: 9px 13px;
+    min-height: 40px;
+    cursor: pointer;
+  }
+
+  .chat-send:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .chat-voice {
+    border: 1px solid #0e7490;
+    border-radius: 9px;
+    background: #ecfeff;
+    color: #0e7490;
+    font-weight: 700;
+    padding: 9px 11px;
+    min-height: 40px;
+    cursor: pointer;
+  }
+
+  .chat-voice.listening {
+    background: #fee2e2;
+    border-color: #ef4444;
+    color: #b91c1c;
+  }
+
+  .chat-voice:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .chat-foot {
+    border-top: 1px solid var(--border);
+    padding: 8px 10px 10px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+    background: #ffffff;
+  }
+
+  .chip {
+    display: inline-block;
+    background: var(--brand-soft);
+    border: 1px solid #86efac;
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-weight: 700;
+    color: #166534;
+    font-size: 10px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  body.compact .support-shell {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  body.compact .faq-panel {
+    display: none;
+  }
+
+  body.compact .chat-panel {
+    min-height: 420px;
+  }
+
+  @media (max-width: 860px) {
+    .support-shell {
+      width: min(100%, 760px);
+      grid-template-columns: 1fr;
+    }
+    .chat-messages {
+      max-height: 330px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    body {
+      padding: 8px;
+    }
+    .panel-head {
+      padding: 10px 11px;
+    }
+    .chat-form {
+      grid-template-columns: 1fr;
+    }
+    .chat-send {
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+<main class="support-shell">
+  <section class="panel faq-panel" aria-label="Frequently asked questions">
+    <div class="panel-head">
+      <h1>Frequently Asked Questions</h1>
+      <p>Instant answers your visitors can read even before chatting.</p>
+    </div>
+    <div id="faqBody" class="faq-body"></div>
+  </section>
+
+  <section class="panel chat-panel" aria-label="Support chatbot">
+    <div class="panel-head">
+      <h2>Support Assistant <span class="chip">Free</span></h2>
+      <p>Rule-based AI-style bot. Free, user-synced, and embed friendly.</p>
+      <p id="chatSyncStatus" class="sync-status">Synced user: Guest</p>
+    </div>
+    <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+    <div id="quickRow" class="quick-row" aria-label="Quick questions"></div>
+    <form id="chatForm" class="chat-form" autocomplete="off">
+      <input id="chatInput" class="chat-input" type="text" maxlength="260" placeholder="Ask about pricing, delivery, returns, payment..." />
+      <button id="chatVoiceBtn" class="chat-voice" type="button" title="Voice input">Mic</button>
+      <button id="chatSend" class="chat-send" type="submit">Send</button>
+    </form>
+    <p class="chat-foot">Tip: Edit <strong>FAQ_DATA</strong> to customize answers. Signed-in users get cloud sync, realtime order updates, return flow, and support ticket actions.</p>
+  </section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="auth-service.js"></script>
+<script src="firebase-auth-helpers.js"></script>
+<script src="firebase-db.js?v=20260306support1"></script>
+<script>
+(function () {
+  const FAQ_DATA = [
+    {
+      id: "pricing",
+      question: "How much does it cost?",
+      questionTl: "Magkano ang presyo?",
+      answer: "Pricing depends on your selected product and quantity. Open the product page, choose your item, then check the final total in checkout before placing the order.",
+      answerTl: "Depende ang presyo sa napiling produkto at dami. Buksan ang product page, piliin ang item, at tingnan ang final total sa checkout bago umorder.",
+      keywords: ["price", "pricing", "cost", "how much", "fee", "amount"]
+    },
+    {
+      id: "modes",
+      question: "What payment methods are available?",
+      questionTl: "Anong payment methods ang available?",
+      answer: "We support Cash on Delivery and Online Payment. Payment options appear during checkout depending on your order setup.",
+      answerTl: "May Cash on Delivery at Online Payment. Lalabas ang available na options sa checkout depende sa setup ng order mo.",
+      keywords: ["payment", "pay", "cod", "cash on delivery", "gcash", "online"]
+    },
+    {
+      id: "shipping",
+      question: "How long is delivery?",
+      questionTl: "Gaano katagal ang delivery?",
+      answer: "Delivery time depends on your location and shipping option. Standard shipping usually takes longer than express shipping.",
+      answerTl: "Depende ang delivery time sa location at shipping option mo. Mas matagal karaniwan ang standard shipping kaysa express shipping.",
+      keywords: ["shipping", "delivery", "arrive", "when", "days", "express", "standard"]
+    },
+    {
+      id: "pickup",
+      question: "Can I choose pickup instead of shipping?",
+      questionTl: "Pwede bang pickup imbes na shipping?",
+      answer: "Yes. If pickup is available for your order, select the pickup option during checkout.",
+      answerTl: "Oo. Kung available ang pickup sa order mo, piliin ang pickup option sa checkout.",
+      keywords: ["pickup", "pick up", "store pickup", "collect"]
+    },
+    {
+      id: "returns",
+      question: "Do you accept returns or refunds?",
+      questionTl: "Tumatanggap ba kayo ng return o refund?",
+      answer: "Return and refund eligibility depends on product condition and request timing. Contact support with your order number for a quick review.",
+      answerTl: "Ang eligibility ng return at refund ay depende sa kondisyon ng item at oras ng request. Makipag-ugnayan sa support para ma-review agad.",
+      keywords: ["return", "refund", "replace", "exchange", "cancel"]
+    },
+    {
+      id: "track",
+      question: "How do I track my order?",
+      questionTl: "Paano ko ita-track ang order ko?",
+      answer: "Open your Orders page to view the current status. You can also contact support and share your order ID for updates.",
+      answerTl: "Buksan ang Orders page para makita ang current status. Pwede rin mag-contact sa support para sa updates.",
+      keywords: ["track", "tracking", "order status", "where is my order", "status"]
+    },
+    {
+      id: "account",
+      question: "Do I need an account to order?",
+      questionTl: "Kailangan ba ng account para umorder?",
+      answer: "For the smoothest checkout and order tracking experience, sign in first before placing an order.",
+      answerTl: "Para mas maayos ang checkout at order tracking, mag-sign in muna bago umorder.",
+      keywords: ["account", "login", "sign in", "register", "guest"]
+    },
+    {
+      id: "support",
+      question: "How can I contact support?",
+      questionTl: "Paano makipag-ugnayan sa support?",
+      answer: "Send your concern with your order number, product, and a short issue summary. This helps support resolve it faster.",
+      answerTl: "Ipadala ang concern mo kasama ang order details at maikling summary ng issue para mas mabilis ma-resolve ng support.",
+      keywords: ["contact", "support", "help", "email", "chat", "hotline"]
+    }
+  ];
+
+  const QUICK_QUESTIONS = {
+    en: [
+      "How much does it cost?",
+      "What payment methods are available?",
+      "How long is delivery?",
+      "Track my order"
+    ],
+    tl: [
+      "Magkano ang presyo?",
+      "Anong payment methods ang available?",
+      "Gaano katagal ang delivery?",
+      "I-track ang order ko"
+    ]
+  };
+
+  const I18N = {
+    en: {
+      userSignedOut: "I can check live order status after you sign in. Once signed in, just ask: \"Track my order\".",
+      orderLookupUnavailable: "Order lookup is unavailable on this page right now.",
+      noOrders: "I cannot find any orders for your account yet.",
+      noMoreOrders: "No more orders to show. Say \"track my order\" to refresh your latest status.",
+      recentOrders: "Recent orders:",
+      showMoreOrdersHint: "Say \"show more orders\" to load more.",
+      allOrdersShown: "That is all recent orders I can find.",
+      latestOrderHeader: "Latest order status:",
+      statusLabel: "Status",
+      itemLabel: "Item",
+      orderedLabel: "Ordered",
+      updatedLabel: "Updated",
+      estimatedDeliveryLabel: "Estimated delivery",
+      latestEventLabel: "Latest event",
+      showMoreAfterSingle: "Say \"show more orders\" to view your other recent orders.",
+      refineOrderHint: "Describe the order with details like product name, size, color, payment method, or order date.",
+      confirmMatchHeader: "I found a possible order match:",
+      confirmMatchHint: "Is this the correct order? Reply yes or no.",
+      confirmMatchNoHint: "Reply \"no\" to see the next match.",
+      confirmedPrefix: "Confirmed.",
+      noConfidentMatch: "No problem. I could not find a confident match from that description.",
+      replyYesNo: "Please reply yes or no. You can also describe the order again.",
+      genericOrderFail: "I could not fetch your order status right now. Please try again in a moment.",
+      fallback: "I do not have a direct FAQ answer for that yet.\nTry asking about pricing, payment, shipping, tracking, returns, or contact support.\nFor custom help, contact {supportContact}.",
+      msgTooLong: "Message is too long. Keep it under 260 characters.",
+      genericBotFail: "Something went wrong while preparing a reply. Please try again.",
+      cloudLocal: "Local",
+      cloudConnecting: "Cloud connecting",
+      cloudReady: "Cloud",
+      cloudError: "Cloud error",
+      syncUserLabel: "Synced user",
+      quickTrack: "Track my order",
+      quickMore: "Show more orders",
+      quickHelp: "Need help with this order",
+      quickReturn: "Request return/refund",
+      quickEnglish: "English",
+      quickTagalog: "Tagalog",
+      langSwitchedEn: "Language switched to English.",
+      langSwitchedTl: "Wika: Tagalog na.",
+      supportNeedOrder: "Please track your order first so I know which order you need help with.",
+      supportAskDetails: "Need help with this order? Please describe the issue in one message. Example: wrong size received.",
+      supportCreated: "Support ticket created.\nTicket ID: {ticketId}\nWe linked this to your selected order.",
+      supportCreateFail: "I could not create a support ticket right now. Please try again.",
+      supportCanceled: "Support ticket request canceled.",
+      returnNeedOrder: "Please track your order first so I can open a return/refund request for the correct item.",
+      returnAskReason: "Return/refund request started. Please provide your reason in one message.",
+      returnCreated: "Return request submitted.\nRequest ID: {requestId}\nStatus: {status}",
+      returnExists: "You already have an active return request for this order.",
+      returnCreateFail: "I could not create the return request right now. Please try again.",
+      returnCanceled: "Return/refund request canceled.",
+      returnStatusNone: "I cannot find any return/refund requests for your account yet.",
+      returnStatusHeader: "Latest return/refund requests:",
+      returnStatusLine: "{index}. Order {orderId} - {status} ({createdAt})",
+      returnStatusAsk: "Ask \"return status\" anytime for updates.",
+      etaDelivered: "Delivered on {date}.",
+      etaCanceled: "This order is canceled.",
+      etaPickup: "Pickup schedule: {date}.",
+      etaSmart: "Smart ETA: around {date}.",
+      etaAwaiting: "Smart ETA: waiting for next status update.",
+      statusPush: "Update: {item} is now {status}.\n{eta}",
+      returnPush: "Return update: order {orderId} is now {status}.",
+      supportPush: "Support update ({ticketId}): {status}.",
+      supportAdminReplyPush: "Admin replied on ticket {ticketId}: {text}",
+      supportReplyAsk: "Your support ticket is open. Send your message now (or type cancel).",
+      supportReplySent: "Reply sent to support ticket {ticketId}.",
+      supportNoOpenTicket: "No open support ticket found. Say \"need help with this order\" to create one.",
+      returnNotEligible: "This order is not eligible for return yet.\nReason: {reason}",
+      orderActionCancelAsk: "Cancel request started for this order. Reply with \"yes\" to confirm or \"cancel\" to abort.",
+      orderActionCancelDone: "Order canceled successfully.",
+      orderActionCancelFail: "I could not cancel this order. It may already be shipped or delivered.",
+      orderActionContactAsk: "Please send the new contact email in one message.",
+      orderActionContactDone: "Contact details updated for this order.",
+      orderActionAddressAsk: "Please send your new shipping address in one line.",
+      orderActionAddressDone: "Shipping address updated for this order.",
+      orderActionInvalid: "I could not apply that order change. Please try again.",
+      recommendationHeader: "Top product picks for you:",
+      recommendationNone: "I could not find matching products right now. Try a different budget/category/size.",
+      stockAlertCreated: "Stock alert created for {product} {size}. We will notify you when it is back.",
+      stockAlertFail: "I could not create the stock alert right now.",
+      compareHeader: "Latest orders comparison:",
+      compareNone: "I need at least 2 orders to compare.",
+      deliveryExceptionGuide: "I can help with delivery exceptions.\n1) Not received\n2) Wrong address\n3) Courier issue\nReply with one option, and I will open support immediately.",
+      preferenceSaved: "Saved your preference.",
+      broadcastNotice: "Notice: {message}",
+      awayAutoReply: "Support is currently in away mode. {message}\nExpected response: around {minutes} minutes.",
+      voiceUnsupported: "Voice input is not supported in this browser.",
+      voicePermissionFail: "Voice input failed. Please check microphone permission.",
+      inputPlaceholder: "Ask about pricing, delivery, returns, payment...",
+      sendBtn: "Send",
+      micBtn: "Mic",
+      micListening: "Listening...",
+      askTrackPrompt: "Track my order"
+    },
+    tl: {
+      userSignedOut: "Makikita ko ang live order status kapag naka-sign in ka. Pag signed in na, sabihin mo lang: \"I-track ang order ko\".",
+      orderLookupUnavailable: "Hindi available ngayon ang order lookup sa page na ito.",
+      noOrders: "Wala akong makitang orders sa account mo sa ngayon.",
+      noMoreOrders: "Wala nang ibang orders na maipapakita. Sabihin ang \"I-track ang order ko\" para mag-refresh.",
+      recentOrders: "Mga recent orders:",
+      showMoreOrdersHint: "Sabihin ang \"show more orders\" para sa iba pang orders.",
+      allOrdersShown: "Iyan na ang lahat ng recent orders na nahanap ko.",
+      latestOrderHeader: "Pinakabagong status ng order:",
+      statusLabel: "Status",
+      itemLabel: "Item",
+      orderedLabel: "Na-order noong",
+      updatedLabel: "Na-update noong",
+      estimatedDeliveryLabel: "Tantyang dating",
+      latestEventLabel: "Pinakahuling event",
+      showMoreAfterSingle: "Sabihin ang \"show more orders\" para makita ang iba mo pang orders.",
+      refineOrderHint: "Ilarawan ang order gamit ang detalye tulad ng product name, size, color, payment method, o date ng order.",
+      confirmMatchHeader: "May nahanap akong posibleng tugma na order:",
+      confirmMatchHint: "Ito ba ang tamang order? Sagot lang ng yes o no.",
+      confirmMatchNoHint: "Mag-reply ng \"no\" para makita ang susunod na match.",
+      confirmedPrefix: "Confirmed.",
+      noConfidentMatch: "Sige. Wala akong nahanap na sapat na tugma mula sa description na iyon.",
+      replyYesNo: "Mag-reply lang ng yes o no. Pwede ka ring magbigay ng bagong description.",
+      genericOrderFail: "Hindi ko makuha ang order status ngayon. Pakisubukang muli mamaya.",
+      fallback: "Wala pa akong direktang FAQ answer para diyan.\nSubukan mong magtanong tungkol sa presyo, payment, shipping, tracking, returns, o support.\nPara sa custom help, kontakin ang {supportContact}.",
+      msgTooLong: "Masyadong mahaba ang message. Gawing hindi lalampas sa 260 characters.",
+      genericBotFail: "May error habang gumagawa ng reply. Pakisubukang muli.",
+      cloudLocal: "Local",
+      cloudConnecting: "Kumokonekta sa cloud",
+      cloudReady: "Cloud",
+      cloudError: "May cloud error",
+      syncUserLabel: "Synced user",
+      quickTrack: "I-track ang order ko",
+      quickMore: "Show more orders",
+      quickHelp: "Kailangan ko ng tulong sa order na ito",
+      quickReturn: "Mag-request ng return/refund",
+      quickEnglish: "English",
+      quickTagalog: "Tagalog",
+      langSwitchedEn: "Language switched to English.",
+      langSwitchedTl: "Wika: Tagalog na.",
+      supportNeedOrder: "I-track muna natin ang order mo para malaman kung aling order ang kailangan ng tulong.",
+      supportAskDetails: "Need help sa order na ito? Ilarawan ang issue sa isang message. Halimbawa: maling size ang natanggap.",
+      supportCreated: "Nagawa na ang support ticket.\nTicket ID: {ticketId}\nNaka-link ito sa napiling order mo.",
+      supportCreateFail: "Hindi makagawa ng support ticket ngayon. Pakisubukang muli.",
+      supportCanceled: "Kinansela ang support ticket request.",
+      returnNeedOrder: "I-track muna natin ang order mo para sa tamang return/refund request.",
+      returnAskReason: "Nasimulan na ang return/refund request. Ilagay ang dahilan mo sa isang message.",
+      returnCreated: "Naipasa ang return request.\nRequest ID: {requestId}\nStatus: {status}",
+      returnExists: "May active return request ka na para sa order na ito.",
+      returnCreateFail: "Hindi makagawa ng return request ngayon. Pakisubukang muli.",
+      returnCanceled: "Kinansela ang return/refund request.",
+      returnStatusNone: "Wala pa akong nakikitang return/refund requests para sa account mo.",
+      returnStatusHeader: "Pinakabagong return/refund requests:",
+      returnStatusLine: "{index}. Order {orderId} - {status} ({createdAt})",
+      returnStatusAsk: "Sabihin ang \"return status\" anumang oras para sa updates.",
+      etaDelivered: "Na-deliver noong {date}.",
+      etaCanceled: "Kanselado ang order na ito.",
+      etaPickup: "Pickup schedule: {date}.",
+      etaSmart: "Smart ETA: humigit-kumulang {date}.",
+      etaAwaiting: "Smart ETA: naghihintay ng susunod na status update.",
+      statusPush: "Update: ang {item} ay {status} na.\n{eta}",
+      returnPush: "Return update: ang order {orderId} ay {status} na.",
+      supportPush: "Support update ({ticketId}): {status}.",
+      supportAdminReplyPush: "May reply ang admin sa ticket {ticketId}: {text}",
+      supportReplyAsk: "Open pa ang support ticket mo. Ipadala ang message mo ngayon (o mag-type ng cancel).",
+      supportReplySent: "Naipadala ang reply sa support ticket {ticketId}.",
+      supportNoOpenTicket: "Wala akong makitang open support ticket. Sabihin ang \"need help with this order\" para gumawa.",
+      returnNotEligible: "Hindi pa eligible for return ang order na ito.\nDahilan: {reason}",
+      orderActionCancelAsk: "Nasimulan ang cancel request para sa order na ito. Mag-reply ng \"yes\" para i-confirm o \"cancel\" para ihinto.",
+      orderActionCancelDone: "Matagumpay na na-cancel ang order.",
+      orderActionCancelFail: "Hindi ko ma-cancel ang order na ito. Maaaring na-ship o delivered na ito.",
+      orderActionContactAsk: "Ipadala ang bagong contact email sa isang message.",
+      orderActionContactDone: "Na-update ang contact details para sa order na ito.",
+      orderActionAddressAsk: "Ipadala ang bagong shipping address sa isang linya.",
+      orderActionAddressDone: "Na-update ang shipping address para sa order na ito.",
+      orderActionInvalid: "Hindi ko ma-apply ang order change na ito. Pakisubukang muli.",
+      recommendationHeader: "Top product picks para sa iyo:",
+      recommendationNone: "Wala akong makitang tugmang products ngayon. Subukan ang ibang budget/category/size.",
+      stockAlertCreated: "Nagawa ang stock alert para sa {product} {size}. I-no-notify ka namin kapag available na.",
+      stockAlertFail: "Hindi makagawa ng stock alert ngayon.",
+      compareHeader: "Paghahambing ng latest orders:",
+      compareNone: "Kailangan ko ng hindi bababa sa 2 orders para mag-compare.",
+      deliveryExceptionGuide: "Makakatulong ako sa delivery exceptions.\n1) Not received\n2) Wrong address\n3) Courier issue\nMag-reply ng isang option at gagawa ako agad ng support ticket.",
+      preferenceSaved: "Na-save ang preference mo.",
+      broadcastNotice: "Paunawa: {message}",
+      awayAutoReply: "Naka-away mode ngayon ang support. {message}\nInaasahang response: mga {minutes} minuto.",
+      voiceUnsupported: "Hindi supported ang voice input sa browser na ito.",
+      voicePermissionFail: "Nag-fail ang voice input. Paki-check ang microphone permission.",
+      inputPlaceholder: "Magtanong tungkol sa presyo, delivery, returns, o payment...",
+      sendBtn: "Send",
+      micBtn: "Mic",
+      micListening: "Nakikinig...",
+      askTrackPrompt: "I-track ang order ko"
+    }
+  };
+
+  const STOP_WORDS = new Set([
+    "a", "an", "the", "is", "are", "do", "does", "can", "i", "you", "my",
+    "to", "for", "of", "in", "on", "at", "with", "and", "or", "it", "we",
+    "me", "please", "about", "tell", "what", "how"
+  ]);
+
+  const params = new URLSearchParams(window.location.search);
+  const compact = params.get("compact") === "1";
+  const brandName = (params.get("brand") || "our team").trim();
+  const supportContact = (params.get("support") || "your support contact").trim();
+  const greetingText = params.get("greeting");
+  const initialLang = normalizeLang(params.get("lang"));
+  const HISTORY_PREFIX = "faq_support_chat_history_v1::";
+  const HISTORY_MAX = 80;
+  const USER_STORAGE_KEY = "currentUser";
+  const CLOUD_COLLECTION = "support_chats";
+  const SUPPORT_TICKETS_COLLECTION = "support_tickets";
+  const faqBody = document.getElementById("faqBody");
+  const chatMessages = document.getElementById("chatMessages");
+  const quickRow = document.getElementById("quickRow");
+  const chatForm = document.getElementById("chatForm");
+  const chatInput = document.getElementById("chatInput");
+  const chatVoiceBtn = document.getElementById("chatVoiceBtn");
+  const chatSend = document.getElementById("chatSend");
+  const chatSyncStatus = document.getElementById("chatSyncStatus");
+  let typingTimeout = null;
+  let typingNode = null;
+  let unsubscribeAuth = null;
+  let unsubscribeCloud = null;
+  let unsubscribeOrderRealtime = null;
+  let unsubscribeReturnRealtime = null;
+  let unsubscribeSupportTicketRealtime = null;
+  let unsubscribeSupportMessageRealtime = null;
+  let unsubscribeSupportSettingsRealtime = null;
+  let unsubscribeSupportPreferenceRealtime = null;
+  let activeUser = null;
+  let activeUserKey = "guest";
+  let chatHistory = [];
+  let syncMode = "local";
+  let syncNote = "";
+  let cachedCloudDb = null;
+  let cloudWriteTimer = null;
+  let cloudWritePending = false;
+  let cloudWriteInFlight = false;
+  let orderListOffset = 0;
+  let lastBotIntent = "";
+  let pendingOrderMatch = null;
+  let pendingSupportTicket = null;
+  let pendingReturnRequest = null;
+  let currentOrderContext = null;
+  let cachedUserOrders = [];
+  let orderStatusSnapshotReady = false;
+  let returnStatusSnapshotReady = false;
+  let supportTicketSnapshotReady = false;
+  let orderStatusById = {};
+  let returnStatusById = {};
+  let supportStatusById = {};
+  let latestSupportTickets = [];
+  let activeSupportTicketId = "";
+  let seenSupportMessageIds = {};
+  let pendingSupportReplyMode = false;
+  let pendingOrderAction = null;
+  let supportSettings = null;
+  let supportBroadcastShown = "";
+  let userSupportPreference = null;
+  let speechRecognition = null;
+  let isVoiceListening = false;
+  let botLanguage = initialLang;
+
+  if (compact) {
+    document.body.classList.add("compact");
+  }
+
+  function normalizeText(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function normalizeLang(value) {
+    const text = String(value || "").toLowerCase().trim();
+    return text === "tl" || text === "tagalog" || text === "fil" ? "tl" : "en";
+  }
+
+  function tr(key, vars) {
+    const table = I18N[botLanguage] || I18N.en;
+    const fallbackTable = I18N.en;
+    let template = table[key];
+    if (typeof template !== "string") {
+      template = fallbackTable[key] || key;
+    }
+    return String(template).replace(/\{(\w+)\}/g, function (_, name) {
+      return vars && Object.prototype.hasOwnProperty.call(vars, name)
+        ? String(vars[name])
+        : "";
+    });
+  }
+
+  function isTagalogIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("tagalog")
+      || text.includes("filipino")
+      || text.includes("mag tagalog")
+      || text.includes("switch to tagalog");
+  }
+
+  function isEnglishIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("english")
+      || text.includes("switch to english")
+      || text.includes("use english");
+  }
+
+  function updateInputLanguageUi() {
+    if (chatInput) {
+      chatInput.placeholder = tr("inputPlaceholder");
+    }
+    if (chatSend) {
+      chatSend.textContent = tr("sendBtn");
+    }
+    if (chatVoiceBtn && !isVoiceListening) {
+      chatVoiceBtn.textContent = tr("micBtn");
+      if (!chatVoiceBtn.disabled) {
+        chatVoiceBtn.title = tr("micBtn");
+      }
+    }
+  }
+
+  function setLanguage(nextLang, options) {
+    const normalized = normalizeLang(nextLang);
+    if (normalized === botLanguage) {
+      updateInputLanguageUi();
+      renderFaqList();
+      renderQuickQuestions();
+      return false;
+    }
+
+    botLanguage = normalized;
+    updateInputLanguageUi();
+    renderFaqList();
+    renderQuickQuestions();
+
+    if (activeUser?.uid && typeof window.appDb?.setSupportPreference === "function") {
+      window.appDb.setSupportPreference(activeUser.uid, {
+        language: botLanguage,
+        preferredContactMethod: userSupportPreference?.preferredContactMethod || "",
+        typicalSize: userSupportPreference?.typicalSize || ""
+      }).then((row) => {
+        if (row) {
+          userSupportPreference = row;
+        }
+      }).catch(() => {});
+    }
+
+    if (options?.announce !== false) {
+      addMessage(
+        botLanguage === "tl" ? tr("langSwitchedTl") : tr("langSwitchedEn"),
+        "bot",
+        false
+      );
+    }
+    return true;
+  }
+
+  function safeReadStorage(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function safeWriteStorage(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function readStoredUser() {
+    const raw = safeReadStorage(USER_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.uid) return null;
+      return {
+        uid: String(parsed.uid),
+        email: typeof parsed.email === "string" ? parsed.email : ""
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeUser(user) {
+    if (!user || !user.uid) return null;
+    return {
+      uid: String(user.uid),
+      email: typeof user.email === "string" ? user.email : ""
+    };
+  }
+
+  function getLiveAuthUser() {
+    try {
+      const snap = window.authService?.getCurrentUser?.();
+      const normalized = normalizeUser(snap);
+      if (normalized) return normalized;
+    } catch {}
+
+    try {
+      const authUser = window.firebaseAuth?.currentUser;
+      const normalized = normalizeUser(authUser);
+      if (normalized) return normalized;
+    } catch {}
+
+    return null;
+  }
+
+  async function resolveInitialUser() {
+    const live = getLiveAuthUser();
+    if (live) return live;
+
+    if (window.authService?.waitForAuthState) {
+      try {
+        const waited = await window.authService.waitForAuthState(3000);
+        const normalized = normalizeUser(waited);
+        if (normalized) return normalized;
+      } catch {}
+    }
+
+    if (window.appAuth?.syncCurrentUser) {
+      try {
+        const synced = await window.appAuth.syncCurrentUser();
+        const normalized = normalizeUser(synced);
+        if (normalized) return normalized;
+      } catch {}
+    }
+
+    return readStoredUser();
+  }
+
+  function userLabel(user) {
+    if (!user) return "Guest";
+    if (user.email) return user.email;
+    return "User " + user.uid.slice(0, 8);
+  }
+
+  function userKey(user) {
+    if (!user || !user.uid) return "guest";
+    return "uid:" + user.uid;
+  }
+
+  function getHistoryStorageKeyForUser(user) {
+    return HISTORY_PREFIX + userKey(user);
+  }
+
+  function getCurrentHistoryStorageKey() {
+    return getHistoryStorageKeyForUser(activeUser);
+  }
+
+  function getFirestoreDb() {
+    if (cachedCloudDb) {
+      return cachedCloudDb;
+    }
+
+    if (!window.firebaseReady || !window.firebase || typeof window.firebase.firestore !== "function") {
+      return null;
+    }
+
+    const databaseId = typeof window.firebaseDatabaseId === "string"
+      ? window.firebaseDatabaseId.trim()
+      : "";
+    const app = typeof window.firebase.app === "function" ? window.firebase.app() : null;
+
+    try {
+      let db = null;
+
+      if (databaseId) {
+        try {
+          if (app) {
+            db = window.firebase.firestore(app, databaseId);
+          } else {
+            db = window.firebase.firestore(databaseId);
+          }
+        } catch {}
+      }
+
+      if (!db && app) {
+        db = window.firebase.firestore(app);
+      }
+
+      if (!db) {
+        db = window.firebase.firestore();
+      }
+
+      cachedCloudDb = db;
+      return cachedCloudDb;
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeHistoryItems(rawItems) {
+    if (!Array.isArray(rawItems)) return [];
+    return rawItems
+      .map((item) => ({
+        role: item?.role === "user" ? "user" : "bot",
+        text: typeof item?.text === "string" ? item.text.trim().slice(0, 1200) : "",
+        isError: Boolean(item?.isError),
+        ts: Number(item?.ts) || Date.now()
+      }))
+      .filter((item) => item.text)
+      .slice(-HISTORY_MAX);
+  }
+
+  function readHistoryFromStorage(key) {
+    const raw = safeReadStorage(key);
+    if (!raw) return [];
+    try {
+      return normalizeHistoryItems(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  }
+
+  function writeHistoryToStorage(key, history) {
+    const trimmed = normalizeHistoryItems(history);
+    safeWriteStorage(key, JSON.stringify(trimmed));
+  }
+
+  function getCloudDocRef(user) {
+    if (!user?.uid) return null;
+    const db = getFirestoreDb();
+    if (!db) return null;
+    return db.collection(CLOUD_COLLECTION).doc(user.uid);
+  }
+
+  function setSyncIndicator(mode, note) {
+    syncMode = mode || "local";
+    syncNote = note || "";
+    updateSyncStatusLabel();
+  }
+
+  function updateSyncStatusLabel() {
+    if (!chatSyncStatus) return;
+    let suffix = tr("cloudLocal");
+    if (syncMode === "cloud_pending") suffix = tr("cloudConnecting");
+    if (syncMode === "cloud") suffix = tr("cloudReady");
+    if (syncMode === "cloud_error") suffix = tr("cloudError");
+
+    let label = tr("syncUserLabel") + ": " + userLabel(activeUser) + " | " + suffix;
+    if (syncNote) {
+      label += " | " + syncNote;
+    }
+    chatSyncStatus.textContent = label;
+  }
+
+  function getWelcomeMessage() {
+    if (greetingText) {
+      return greetingText;
+    }
+    if (botLanguage === "tl") {
+      return "Hi, ako ang support assistant ng " + brandName + ". Magtanong ka lang mula sa FAQ at sasagot ako agad.";
+    }
+    return "Hi, I am the support assistant for " + brandName + ". Ask me anything from the FAQ and I will answer instantly.";
+  }
+
+  function persistHistory(options) {
+    writeHistoryToStorage(getCurrentHistoryStorageKey(), chatHistory);
+    if (options?.skipCloud) return;
+    queueCloudPersist();
+  }
+
+  function stopCloudSync() {
+    if (typeof unsubscribeCloud === "function") {
+      try {
+        unsubscribeCloud();
+      } catch {}
+    }
+    unsubscribeCloud = null;
+
+    if (cloudWriteTimer) {
+      clearTimeout(cloudWriteTimer);
+      cloudWriteTimer = null;
+    }
+    cloudWritePending = false;
+    cloudWriteInFlight = false;
+  }
+
+  function stopRealtimeWatchers() {
+    if (typeof unsubscribeOrderRealtime === "function") {
+      try {
+        unsubscribeOrderRealtime();
+      } catch {}
+    }
+    unsubscribeOrderRealtime = null;
+
+    if (typeof unsubscribeReturnRealtime === "function") {
+      try {
+        unsubscribeReturnRealtime();
+      } catch {}
+    }
+    unsubscribeReturnRealtime = null;
+
+    if (typeof unsubscribeSupportTicketRealtime === "function") {
+      try {
+        unsubscribeSupportTicketRealtime();
+      } catch {}
+    }
+    unsubscribeSupportTicketRealtime = null;
+
+    if (typeof unsubscribeSupportMessageRealtime === "function") {
+      try {
+        unsubscribeSupportMessageRealtime();
+      } catch {}
+    }
+    unsubscribeSupportMessageRealtime = null;
+
+    if (typeof unsubscribeSupportSettingsRealtime === "function") {
+      try {
+        unsubscribeSupportSettingsRealtime();
+      } catch {}
+    }
+    unsubscribeSupportSettingsRealtime = null;
+
+    if (typeof unsubscribeSupportPreferenceRealtime === "function") {
+      try {
+        unsubscribeSupportPreferenceRealtime();
+      } catch {}
+    }
+    unsubscribeSupportPreferenceRealtime = null;
+
+    orderStatusSnapshotReady = false;
+    returnStatusSnapshotReady = false;
+    supportTicketSnapshotReady = false;
+    orderStatusById = {};
+    returnStatusById = {};
+    supportStatusById = {};
+    cachedUserOrders = [];
+    latestSupportTickets = [];
+    activeSupportTicketId = "";
+    seenSupportMessageIds = {};
+    pendingSupportReplyMode = false;
+    pendingOrderAction = null;
+    supportSettings = null;
+    supportBroadcastShown = "";
+    userSupportPreference = null;
+  }
+
+  function applyRemoteCloudHistory(items) {
+    const normalized = normalizeHistoryItems(items);
+    const localSerialized = JSON.stringify(normalizeHistoryItems(chatHistory));
+    const remoteSerialized = JSON.stringify(normalized);
+    if (localSerialized === remoteSerialized) return;
+    chatHistory = normalized;
+    ensureHistoryHasGreeting();
+    writeHistoryToStorage(getCurrentHistoryStorageKey(), chatHistory);
+    renderHistory();
+  }
+
+  async function persistCloudHistory(user, historyToSave) {
+    const docRef = getCloudDocRef(user);
+    if (!docRef) return false;
+
+    const payload = {
+      uid: user.uid,
+      email: user.email || "",
+      messages: normalizeHistoryItems(historyToSave),
+      updatedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp
+        ? window.firebase.firestore.FieldValue.serverTimestamp()
+        : new Date().toISOString(),
+      source: "faq_support_chatbot"
+    };
+
+    await docRef.set(payload, { merge: true });
+    return true;
+  }
+
+  async function flushCloudPersistQueue() {
+    if (cloudWriteInFlight || !cloudWritePending) return;
+    if (!activeUser?.uid) return;
+
+    cloudWritePending = false;
+    cloudWriteInFlight = true;
+    const userAtWrite = activeUser;
+    const historyAtWrite = normalizeHistoryItems(chatHistory);
+
+    try {
+      await persistCloudHistory(userAtWrite, historyAtWrite);
+      setSyncIndicator("cloud");
+    } catch (error) {
+      console.error("Cloud chat sync write failed", error);
+      setSyncIndicator("cloud_error", "Using local backup");
+    } finally {
+      cloudWriteInFlight = false;
+      if (cloudWritePending) {
+        void flushCloudPersistQueue();
+      }
+    }
+  }
+
+  function queueCloudPersist() {
+    if (!activeUser?.uid) return;
+    if (!getCloudDocRef(activeUser)) return;
+
+    cloudWritePending = true;
+    if (cloudWriteTimer) {
+      clearTimeout(cloudWriteTimer);
+    }
+    cloudWriteTimer = window.setTimeout(function () {
+      cloudWriteTimer = null;
+      void flushCloudPersistQueue();
+    }, 140);
+  }
+
+  async function startCloudSyncForActiveUser() {
+    if (!activeUser?.uid) {
+      setSyncIndicator("local");
+      return;
+    }
+
+    const docRef = getCloudDocRef(activeUser);
+    if (!docRef) {
+      setSyncIndicator("local", "Firestore unavailable");
+      return;
+    }
+
+    setSyncIndicator("cloud_pending");
+
+    try {
+      const snapshot = await docRef.get();
+      if (snapshot.exists) {
+        const cloudMessages = normalizeHistoryItems(snapshot.data()?.messages);
+        if (cloudMessages.length) {
+          applyRemoteCloudHistory(cloudMessages);
+        } else {
+          ensureHistoryHasGreeting();
+          persistHistory();
+        }
+      } else {
+        ensureHistoryHasGreeting();
+        persistHistory();
+      }
+    } catch (error) {
+      console.error("Cloud chat initial sync failed", error);
+      setSyncIndicator("cloud_error", "Initial read failed");
+    }
+
+    unsubscribeCloud = docRef.onSnapshot(
+      (snapshot) => {
+        if (!snapshot.exists) return;
+        applyRemoteCloudHistory(snapshot.data()?.messages);
+        setSyncIndicator("cloud");
+      },
+      (error) => {
+        console.error("Cloud chat listener failed", error);
+        setSyncIndicator("cloud_error", "Realtime sync paused");
+      }
+    );
+  }
+
+  function setCurrentOrderContext(order, options) {
+    const previousId = currentOrderContext?.id || "";
+    if (order && order.id) {
+      currentOrderContext = order;
+    } else {
+      currentOrderContext = null;
+    }
+    const nextId = currentOrderContext?.id || "";
+    const changed = previousId !== nextId;
+    if (!options?.silent || changed) {
+      renderQuickQuestions();
+    }
+  }
+
+  function getCurrentOrderContextOrFallback() {
+    if (currentOrderContext?.id) {
+      const refreshed = cachedUserOrders.find((row) => row.id === currentOrderContext.id);
+      if (refreshed) {
+        currentOrderContext = refreshed;
+      }
+    }
+
+    if (currentOrderContext?.id) {
+      return currentOrderContext;
+    }
+    const primary = selectPrimaryOrderEntry(cachedUserOrders);
+    if (primary?.order) {
+      setCurrentOrderContext(primary.order, { silent: true });
+      return primary.order;
+    }
+    return null;
+  }
+
+  function isSupportTicketOpenStatus(status) {
+    const safe = normalizeSupportStatus(status);
+    return safe === "open" || safe === "in_progress" || safe === "pending_customer";
+  }
+
+  function getActiveSupportTicket() {
+    if (!latestSupportTickets.length) return null;
+    if (activeSupportTicketId) {
+      const found = latestSupportTickets.find((row) => row.id === activeSupportTicketId);
+      if (found) return found;
+    }
+    const openTicket = latestSupportTickets.find((row) => isSupportTicketOpenStatus(row.status));
+    if (openTicket) return openTicket;
+    return latestSupportTickets[0] || null;
+  }
+
+  function setActiveSupportTicket(ticketId) {
+    const nextId = String(ticketId || "");
+    if (activeSupportTicketId === nextId) {
+      return;
+    }
+    activeSupportTicketId = nextId;
+    seenSupportMessageIds = {};
+  }
+
+  function startSupportMessageWatcher(ticketId, db) {
+    if (typeof unsubscribeSupportMessageRealtime === "function") {
+      try {
+        unsubscribeSupportMessageRealtime();
+      } catch {}
+    }
+    unsubscribeSupportMessageRealtime = null;
+    seenSupportMessageIds = {};
+
+    const safeTicketId = String(ticketId || "");
+    if (!safeTicketId || typeof db?.watchSupportTicketMessages !== "function") {
+      return;
+    }
+
+    let initialized = false;
+    unsubscribeSupportMessageRealtime = db.watchSupportTicketMessages(
+      safeTicketId,
+      function (rows) {
+        const list = Array.isArray(rows) ? rows : [];
+        list.forEach((row) => {
+          const msgId = String(row?.id || "");
+          if (!msgId) return;
+          const senderRole = normalizeText(row?.senderRole || "customer");
+          const isAdminReply = senderRole === "admin";
+          if (initialized && !seenSupportMessageIds[msgId] && isAdminReply) {
+              addMessage(
+                tr("supportAdminReplyPush", {
+                  ticketId: safeTicketId,
+                  text: String(row?.text || "").slice(0, 200)
+                }),
+                "bot",
+                false
+              );
+          }
+          seenSupportMessageIds[msgId] = true;
+        });
+        initialized = true;
+      },
+      function (error) {
+        console.error("Realtime support message watcher failed", error);
+      },
+      160
+    );
+  }
+
+  function startRealtimeWatchersForActiveUser() {
+    stopRealtimeWatchers();
+    if (!activeUser?.uid) {
+      return;
+    }
+
+    const db = window.appDb;
+    if (!db) {
+      return;
+    }
+
+    if (typeof db.watchUserOrders === "function") {
+      unsubscribeOrderRealtime = db.watchUserOrders(
+        activeUser.uid,
+        function (orders) {
+          const rows = Array.isArray(orders) ? orders : [];
+          cachedUserOrders = rows.slice();
+          const nextStatus = {};
+
+          rows.forEach((order) => {
+            nextStatus[order.id] = normalizeText(order?.status || "pending");
+            if (orderStatusSnapshotReady) {
+              const prev = orderStatusById[order.id];
+              const now = nextStatus[order.id];
+              if (prev && prev !== now) {
+                addMessage(
+                  tr("statusPush", {
+                    item: buildOrderItemLabel(order),
+                    status: formatOrderStatusLabel(order?.status),
+                    eta: getSmartEtaText(order)
+                  }),
+                  "bot",
+                  false
+                );
+              }
+            }
+          });
+
+          orderStatusById = nextStatus;
+          orderStatusSnapshotReady = true;
+
+          const active = getCurrentOrderContextOrFallback();
+          if (active) {
+            setCurrentOrderContext(active, { silent: true });
+          }
+        },
+        function (error) {
+          console.error("Realtime order watcher failed", error);
+        }
+      );
+    }
+
+    if (typeof db.watchUserReturnRequests === "function") {
+      unsubscribeReturnRealtime = db.watchUserReturnRequests(
+        activeUser.uid,
+        function (rows) {
+          const list = Array.isArray(rows) ? rows : [];
+          const nextStatus = {};
+          list.forEach((entry) => {
+            nextStatus[entry.id] = normalizeText(entry?.status || "requested");
+            if (returnStatusSnapshotReady) {
+              const prev = returnStatusById[entry.id];
+              const now = nextStatus[entry.id];
+              if (prev && prev !== now) {
+                addMessage(
+                  tr("returnPush", {
+                    orderId: entry.orderId || "N/A",
+                    status: formatOrderStatusLabel(entry.status)
+                  }),
+                  "bot",
+                  false
+                );
+              }
+            }
+          });
+          returnStatusById = nextStatus;
+          returnStatusSnapshotReady = true;
+        },
+        function (error) {
+          console.error("Realtime return watcher failed", error);
+        },
+        20
+      );
+    }
+
+    if (typeof db.watchSupportTickets === "function") {
+      unsubscribeSupportTicketRealtime = db.watchSupportTickets(
+        function (rows) {
+          const list = (Array.isArray(rows) ? rows : [])
+            .filter((row) => String(row?.requesterUid || "") === activeUser.uid)
+            .sort((a, b) => toDateMs(b?.updatedAt || b?.createdAt) - toDateMs(a?.updatedAt || a?.createdAt));
+          latestSupportTickets = list;
+          const nextStatus = {};
+          list.forEach((ticket) => {
+            nextStatus[ticket.id] = normalizeSupportStatus(ticket?.status || "open");
+            if (supportTicketSnapshotReady) {
+              const prev = supportStatusById[ticket.id];
+              const now = nextStatus[ticket.id];
+              if (prev && prev !== now) {
+                addMessage(
+                  tr("supportPush", {
+                    ticketId: ticket.id,
+                    status: formatOrderStatusLabel(now)
+                  }),
+                  "bot",
+                  false
+                );
+              }
+            }
+          });
+          supportStatusById = nextStatus;
+          supportTicketSnapshotReady = true;
+
+          const activeTicket = getActiveSupportTicket();
+          const nextTicketId = String(activeTicket?.id || "");
+          if (nextTicketId !== String(activeSupportTicketId || "")) {
+            setActiveSupportTicket(nextTicketId);
+            startSupportMessageWatcher(nextTicketId, db);
+          }
+        },
+        function (error) {
+          console.error("Realtime support ticket watcher failed", error);
+        },
+        { requesterUid: activeUser.uid, limitCount: 120 }
+      );
+    }
+
+    if (typeof db.watchSupportSettings === "function") {
+      unsubscribeSupportSettingsRealtime = db.watchSupportSettings(
+        function (row) {
+          supportSettings = row || null;
+          const broadcastMessage = String(supportSettings?.broadcastMessage || "").trim();
+          const broadcastActive = Boolean(supportSettings?.broadcastActive) && Boolean(broadcastMessage);
+          if (broadcastActive && broadcastMessage !== supportBroadcastShown) {
+            supportBroadcastShown = broadcastMessage;
+            addMessage(tr("broadcastNotice", { message: broadcastMessage }), "bot", false);
+          }
+        },
+        function (error) {
+          console.error("Realtime support settings watcher failed", error);
+        },
+        "global"
+      );
+    }
+
+    if (typeof db.watchSupportPreference === "function") {
+      unsubscribeSupportPreferenceRealtime = db.watchSupportPreference(
+        activeUser.uid,
+        function (row) {
+          if (!row) return;
+          userSupportPreference = row;
+          if (row.language && normalizeLang(row.language) !== botLanguage) {
+            setLanguage(row.language, { announce: false });
+          }
+        },
+        function (error) {
+          console.error("Realtime support preference watcher failed", error);
+        }
+      );
+    }
+  }
+
+  function renderHistory() {
+    chatMessages.innerHTML = "";
+    chatHistory.forEach((item) => {
+      const node = document.createElement("div");
+      node.className = "msg " + item.role + (item.isError ? " error" : "");
+      node.textContent = item.text;
+      chatMessages.appendChild(node);
+    });
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function ensureHistoryHasGreeting() {
+    if (chatHistory.length > 0) return;
+    chatHistory = [
+      {
+        role: "bot",
+        text: getWelcomeMessage(),
+        isError: false,
+        ts: Date.now()
+      }
+    ];
+    persistHistory();
+  }
+
+  function setActiveUser(user, options) {
+    const nextUser = normalizeUser(user);
+    const nextKey = userKey(nextUser);
+    const previousKey = activeUserKey;
+    const userChanged = previousKey !== nextKey;
+
+    if (userChanged) {
+      stopCloudSync();
+      stopRealtimeWatchers();
+    }
+
+    activeUser = nextUser;
+    activeUserKey = nextKey;
+    setSyncIndicator("local");
+
+    const shouldReload = Boolean(options?.forceReload) || userChanged;
+    if (!shouldReload) return;
+    orderListOffset = 0;
+    lastBotIntent = "";
+    pendingOrderMatch = null;
+    pendingSupportTicket = null;
+    pendingReturnRequest = null;
+    pendingSupportReplyMode = false;
+    pendingOrderAction = null;
+    currentOrderContext = null;
+    renderQuickQuestions();
+
+    chatHistory = readHistoryFromStorage(getCurrentHistoryStorageKey());
+    ensureHistoryHasGreeting();
+    renderHistory();
+    void startCloudSyncForActiveUser();
+    startRealtimeWatchersForActiveUser();
+
+    if (options?.announce) {
+      const note = botLanguage === "tl"
+        ? "Na-update ang sync. Current user: " + userLabel(activeUser)
+        : "Sync updated. Current user: " + userLabel(activeUser);
+      addMessage(note, "bot", false, { persist: false });
+    }
+  }
+
+  function tokenize(value) {
+    const normalized = normalizeText(value);
+    if (!normalized) return [];
+    return normalized.split(" ").filter((token) => token && !STOP_WORDS.has(token));
+  }
+
+  function buildFaqSearchText(item) {
+    return normalizeText(
+      item.question + " " + item.answer + " " + (item.keywords || []).join(" ")
+    );
+  }
+
+  function renderFaqList() {
+    faqBody.innerHTML = "";
+    FAQ_DATA.forEach((item) => {
+      const details = document.createElement("details");
+      details.className = "faq-item";
+
+      const summary = document.createElement("summary");
+      summary.className = "faq-summary";
+      summary.textContent = botLanguage === "tl" && item.questionTl ? item.questionTl : item.question;
+
+      const chevron = document.createElement("span");
+      chevron.className = "faq-chevron";
+      chevron.textContent = "+";
+      summary.appendChild(chevron);
+
+      details.addEventListener("toggle", function () {
+        chevron.textContent = details.open ? "-" : "+";
+      });
+
+      const answer = document.createElement("p");
+      answer.className = "faq-answer";
+      answer.textContent = botLanguage === "tl" && item.answerTl ? item.answerTl : item.answer;
+
+      details.appendChild(summary);
+      details.appendChild(answer);
+      faqBody.appendChild(details);
+    });
+  }
+
+  function addMessage(content, role, isError, options) {
+    const node = document.createElement("div");
+    node.className = "msg " + role + (isError ? " error" : "");
+    node.textContent = content;
+    chatMessages.appendChild(node);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    const shouldPersist = options?.persist !== false;
+    if (shouldPersist) {
+      chatHistory.push({
+        role: role === "user" ? "user" : "bot",
+        text: String(content || ""),
+        isError: Boolean(isError),
+        ts: Date.now()
+      });
+      chatHistory = chatHistory.slice(-HISTORY_MAX);
+      persistHistory();
+    }
+  }
+
+  function addTypingIndicator() {
+    removeTypingIndicator();
+    typingNode = document.createElement("div");
+    typingNode.className = "msg bot";
+    const wrapper = document.createElement("span");
+    wrapper.className = "typing";
+    wrapper.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    typingNode.appendChild(wrapper);
+    chatMessages.appendChild(typingNode);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function removeTypingIndicator() {
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+      typingTimeout = null;
+    }
+    if (typingNode && typingNode.parentNode) {
+      typingNode.parentNode.removeChild(typingNode);
+    }
+    typingNode = null;
+  }
+
+  function handleStorageEvent(event) {
+    if (!event || !event.key) return;
+    if (event.key === USER_STORAGE_KEY) {
+      const storedUser = readStoredUser();
+      if (userKey(storedUser) !== activeUserKey) {
+        setActiveUser(storedUser, { announce: true });
+      }
+      return;
+    }
+
+    if (event.key === getCurrentHistoryStorageKey()) {
+      chatHistory = readHistoryFromStorage(getCurrentHistoryStorageKey());
+      ensureHistoryHasGreeting();
+      renderHistory();
+    }
+  }
+
+  function findBestFaqMatch(query) {
+    const normalized = normalizeText(query);
+    if (!normalized) return null;
+    const queryTokens = tokenize(query);
+    if (!queryTokens.length) return null;
+
+    let bestItem = null;
+    let bestScore = 0;
+
+    FAQ_DATA.forEach((item) => {
+      const searchable = buildFaqSearchText(item);
+      let score = 0;
+
+      if (normalized === normalizeText(item.question)) {
+        score += 8;
+      }
+      if (normalized.includes(normalizeText(item.question))) {
+        score += 6;
+      }
+
+      queryTokens.forEach((token) => {
+        if (item.keywords && item.keywords.some((k) => normalizeText(k).includes(token))) {
+          score += 4;
+          return;
+        }
+        if (searchable.includes(token)) {
+          score += 2;
+        }
+      });
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestItem = item;
+      }
+    });
+
+    if (bestScore < 3) {
+      return null;
+    }
+    return bestItem;
+  }
+
+  function formatOrderStatusLabel(status) {
+    return String(status || "pending")
+      .replace(/_/g, " ")
+      .trim();
+  }
+
+  function normalizeSupportStatus(value) {
+    const safe = normalizeText(value || "open");
+    if (safe === "in progress") return "in_progress";
+    if (safe === "pending customer") return "pending_customer";
+    if (["open", "in_progress", "pending_customer", "resolved", "closed"].includes(safe)) {
+      return safe;
+    }
+    return "open";
+  }
+
+  function normalizeSupportPriority(value) {
+    const safe = normalizeText(value || "normal");
+    if (["urgent", "high", "normal", "low"].includes(safe)) {
+      return safe;
+    }
+    return "normal";
+  }
+
+  function formatOrderDateLabel(value) {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "N/A";
+    }
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+
+  function toIsoStringSafe(value) {
+    const date = new Date(value || 0);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toISOString();
+  }
+
+  function isCancelIntent(query) {
+    const text = normalizeText(query);
+    return text === "cancel"
+      || text === "stop"
+      || text === "never mind"
+      || text === "nevermind"
+      || text === "ayaw ko na"
+      || text === "huwag na";
+  }
+
+  function toDateMs(value) {
+    const ms = new Date(value || 0).getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  function isAffirmativeReply(query) {
+    const text = normalizeText(query);
+    return text === "yes"
+      || text === "y"
+      || text === "yeah"
+      || text === "yep"
+      || text === "yup"
+      || text === "correct"
+      || text === "right"
+      || text === "that one"
+      || text === "this one";
+  }
+
+  function isNegativeReply(query) {
+    const text = normalizeText(query);
+    return text === "no"
+      || text === "n"
+      || text === "nope"
+      || text === "nah"
+      || text === "not that"
+      || text === "wrong";
+  }
+
+  function isShowMoreOrdersIntent(query) {
+    const text = normalizeText(query);
+    if (!text) return false;
+
+    if (text === "show more" || text === "more" || text === "next") {
+      return lastBotIntent === "order_status"
+        || lastBotIntent === "order_list"
+        || lastBotIntent === "order_confirm";
+    }
+
+    return text.includes("show more orders")
+      || text.includes("more orders")
+      || text.includes("next orders")
+      || text.includes("older orders")
+      || text.includes("show my orders")
+      || text.includes("list my orders")
+      || text.includes("all my orders");
+  }
+
+  function isOrderStatusIntent(query) {
+    const text = normalizeText(query);
+    if (!text) return false;
+
+    if (isShowMoreOrdersIntent(query)) {
+      return true;
+    }
+
+    if (
+      text.includes("where is my order")
+      || text.includes("track my order")
+      || text.includes("track order")
+      || text.includes("order status")
+      || text.includes("order tracking")
+      || text.includes("delivery status")
+      || text.includes("package status")
+      || text.includes("where is my package")
+      || text.includes("check my order")
+      || text.includes("find my order")
+    ) {
+      return true;
+    }
+
+    const hasOrderTerm = text.includes("order")
+      || text.includes("delivery")
+      || text.includes("package");
+    const hasStatusTerm = text.includes("status")
+      || text.includes("track")
+      || text.includes("tracking")
+      || text.includes("where")
+      || text.includes("update")
+      || text.includes("latest");
+
+    return hasOrderTerm && hasStatusTerm;
+  }
+
+  function isActiveOrderStatus(status) {
+    const value = normalizeText(status);
+    return value === "pending"
+      || value === "paid"
+      || value === "confirmed"
+      || value === "processing"
+      || value === "in transit"
+      || value === "in_transit"
+      || value === "shipped"
+      || value === "out for delivery"
+      || value === "out_for_delivery";
+  }
+
+  function getOrderSortDate(order) {
+    return toDateMs(order?.updatedAt || order?.createdAt);
+  }
+
+  function selectPrimaryOrderEntry(orders) {
+    const entries = orders.map((order, index) => ({ order, index }));
+    if (!entries.length) return null;
+
+    const activeEntries = entries.filter((entry) => isActiveOrderStatus(entry.order?.status));
+    const pool = activeEntries.length ? activeEntries : entries;
+    pool.sort((a, b) => getOrderSortDate(b.order) - getOrderSortDate(a.order));
+    return pool[0];
+  }
+
+  function buildOrderItemLabel(order) {
+    const productName = String(order?.productName || "Order item").trim();
+    const quantity = Math.max(1, Number(order?.quantity) || 1);
+    return productName + " x" + String(quantity);
+  }
+
+  function buildOrderSearchBlob(order) {
+    return normalizeText([
+      order?.id || "",
+      order?.productName || "",
+      order?.productSize || "",
+      order?.productCategory || "",
+      Array.isArray(order?.productTags) ? order.productTags.join(" ") : "",
+      order?.status || "",
+      order?.paymentMethod || "",
+      order?.shippingOption || "",
+      order?.deliveryMethod || "",
+      order?.orderNotes || "",
+      order?.quantity || "",
+      order?.createdAt || "",
+      order?.updatedAt || ""
+    ].join(" "));
+  }
+
+  function extractOrderDetailTokens(query) {
+    const ORDER_GENERIC_TOKENS = new Set([
+      "track", "tracking", "order", "orders", "status", "where", "my", "me", "show",
+      "more", "next", "older", "list", "latest", "update", "updates", "package",
+      "delivery", "check", "find", "please", "the", "a", "an", "this", "that"
+    ]);
+
+    return tokenize(query).filter((token) => {
+      if (!token) return false;
+      if (ORDER_GENERIC_TOKENS.has(token)) return false;
+      return token.length >= 2;
+    });
+  }
+
+  function rankOrdersByDetailQuery(orders, query) {
+    const normalizedQuery = normalizeText(query);
+    const detailTokens = extractOrderDetailTokens(query);
+    if (!detailTokens.length) {
+      return [];
+    }
+
+    return orders
+      .map((order, index) => {
+        const searchBlob = buildOrderSearchBlob(order);
+        const productName = normalizeText(order?.productName || "");
+        const productSize = normalizeText(order?.productSize || "");
+        const statusText = normalizeText(order?.status || "");
+        let score = 0;
+
+        if (productName && normalizedQuery.includes(productName)) {
+          score += 12;
+        }
+        if (productSize && normalizedQuery.includes(productSize)) {
+          score += 4;
+        }
+
+        detailTokens.forEach((token) => {
+          if (searchBlob.includes(token)) {
+            score += token.length >= 4 ? 3 : 2;
+          }
+          if (productName && productName.includes(token)) {
+            score += 2;
+          }
+          if (statusText && statusText.includes(token)) {
+            score += 1;
+          }
+        });
+
+        return {
+          order,
+          index,
+          score
+        };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        const activeDiff = Number(isActiveOrderStatus(b.order?.status)) - Number(isActiveOrderStatus(a.order?.status));
+        if (activeDiff !== 0) {
+          return activeDiff;
+        }
+        return getOrderSortDate(b.order) - getOrderSortDate(a.order);
+      });
+  }
+
+  function buildOrderConfirmationReply(entry, rank, totalCandidates) {
+    const order = entry?.order;
+    if (!order) {
+      return tr("genericOrderFail");
+    }
+
+    const lines = [];
+    lines.push(tr("confirmMatchHeader"));
+    lines.push(tr("itemLabel") + ": " + buildOrderItemLabel(order));
+    lines.push(tr("statusLabel") + ": " + formatOrderStatusLabel(order?.status));
+    lines.push(tr("orderedLabel") + ": " + formatOrderDateLabel(order?.createdAt));
+    lines.push(getSmartEtaText(order));
+
+    if (totalCandidates > 1) {
+      lines.push("Match " + String(rank) + " of " + String(totalCandidates) + ".");
+      lines.push(tr("confirmMatchNoHint"));
+    }
+    lines.push(tr("confirmMatchHint"));
+    return lines.join("\n");
+  }
+
+  function buildOrderListReply(orders, startIndex, count) {
+    const start = Math.max(0, Number(startIndex) || 0);
+    const chunkSize = Math.max(1, Number(count) || 3);
+    const chunk = orders.slice(start, start + chunkSize);
+    if (!chunk.length) {
+      return tr("noMoreOrders");
+    }
+
+    const lines = [tr("recentOrders")];
+    chunk.forEach((order, idx) => {
+      lines.push(
+        String(start + idx + 1)
+        + ". "
+        + buildOrderItemLabel(order)
+        + " - "
+        + formatOrderStatusLabel(order?.status)
+        + " (" + formatOrderDateLabel(order?.createdAt) + ")"
+      );
+      lines.push("   " + getSmartEtaText(order));
+    });
+
+    const hasMore = start + chunk.length < orders.length;
+    if (hasMore) {
+      lines.push(tr("showMoreOrdersHint"));
+    } else {
+      lines.push(tr("allOrdersShown"));
+    }
+
+    return lines.join("\n");
+  }
+
+  function buildRefineOrderHint() {
+    return tr("refineOrderHint");
+  }
+
+  function getStatusHistoryDate(order, targetStatus) {
+    const list = Array.isArray(order?.statusHistory) ? order.statusHistory : [];
+    const normalizedTarget = normalizeText(targetStatus);
+    for (let idx = list.length - 1; idx >= 0; idx -= 1) {
+      const row = list[idx];
+      if (normalizeText(row?.status) === normalizedTarget) {
+        const iso = toIsoStringSafe(row?.createdAt);
+        if (iso) return iso;
+      }
+    }
+    return "";
+  }
+
+  function computeSmartEtaDate(order) {
+    const status = normalizeText(order?.status || "pending");
+    const deliveryMethod = normalizeText(order?.deliveryMethod || "ship");
+    const shippingOption = normalizeText(order?.shippingOption || "standard_shipping");
+
+    if (deliveryMethod === "pickup") {
+      const pickupDate = toIsoStringSafe(order?.pickupDetails?.pickupDate || "");
+      if (pickupDate) return pickupDate;
+    }
+
+    const explicitEta = toIsoStringSafe(order?.estimatedDeliveryAt);
+    if (explicitEta) return explicitEta;
+
+    const now = Date.now();
+    const baseCreated = toDateMs(order?.createdAt) || now;
+    const express = shippingOption === "express shipping" || shippingOption === "express_shipping";
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    if (status === "delivered") {
+      const deliveredAt = getStatusHistoryDate(order, "delivered") || toIsoStringSafe(order?.updatedAt);
+      return deliveredAt;
+    }
+    if (status === "canceled" || status === "cancelled") {
+      return "";
+    }
+    if (status === "out for delivery" || status === "out_for_delivery") {
+      return new Date(now + 6 * 60 * 60 * 1000).toISOString();
+    }
+    if (status === "in transit" || status === "in_transit" || status === "shipped") {
+      return new Date(now + (express ? 1 : 2) * dayMs).toISOString();
+    }
+    if (status === "paid" || status === "processing" || status === "confirmed") {
+      return new Date(baseCreated + (express ? 2 : 5) * dayMs).toISOString();
+    }
+    if (status === "pending") {
+      return new Date(baseCreated + (express ? 3 : 6) * dayMs).toISOString();
+    }
+
+    return "";
+  }
+
+  function getSmartEtaText(order) {
+    const status = normalizeText(order?.status || "pending");
+    if (status === "delivered") {
+      const deliveredAt = getStatusHistoryDate(order, "delivered") || toIsoStringSafe(order?.updatedAt);
+      if (deliveredAt) {
+        return tr("etaDelivered", { date: formatOrderDateLabel(deliveredAt) });
+      }
+      return tr("etaDelivered", { date: formatOrderDateLabel(new Date().toISOString()) });
+    }
+    if (status === "canceled" || status === "cancelled") {
+      return tr("etaCanceled");
+    }
+
+    const etaIso = computeSmartEtaDate(order);
+    if (!etaIso) {
+      return tr("etaAwaiting");
+    }
+
+    if (normalizeText(order?.deliveryMethod || "ship") === "pickup") {
+      return tr("etaPickup", { date: formatOrderDateLabel(etaIso) });
+    }
+    return tr("etaSmart", { date: formatOrderDateLabel(etaIso) });
+  }
+
+  function buildSingleOrderReply(order, totalOrders) {
+    const lines = [];
+    lines.push(tr("latestOrderHeader"));
+    lines.push(tr("statusLabel") + ": " + formatOrderStatusLabel(order?.status));
+    lines.push(tr("itemLabel") + ": " + buildOrderItemLabel(order));
+    lines.push(tr("orderedLabel") + ": " + formatOrderDateLabel(order?.createdAt));
+
+    if (order?.updatedAt) {
+      lines.push(tr("updatedLabel") + ": " + formatOrderDateLabel(order.updatedAt));
+    }
+    if (order?.estimatedDeliveryAt) {
+      lines.push(tr("estimatedDeliveryLabel") + ": " + formatOrderDateLabel(order.estimatedDeliveryAt));
+    }
+    lines.push(getSmartEtaText(order));
+
+    const latestHistory = Array.isArray(order?.statusHistory) && order.statusHistory.length
+      ? order.statusHistory[order.statusHistory.length - 1]
+      : null;
+    if (latestHistory?.status) {
+      lines.push(
+        tr("latestEventLabel") + ": "
+        + formatOrderStatusLabel(latestHistory.status)
+        + " (" + formatOrderDateLabel(latestHistory.createdAt) + ")"
+      );
+    }
+
+    if ((Number(totalOrders) || 0) > 1) {
+      lines.push(tr("showMoreAfterSingle"));
+    }
+
+    return lines.join("\n");
+  }
+
+  function consumePendingOrderConfirmation(query) {
+    if (!pendingOrderMatch) {
+      return null;
+    }
+
+    if (isAffirmativeReply(query)) {
+      const activeIndex = Number(pendingOrderMatch.activeIndex) || 0;
+      const selected = pendingOrderMatch.candidates[activeIndex];
+      const totalOrders = Number(pendingOrderMatch.totalOrders) || 0;
+      pendingOrderMatch = null;
+      lastBotIntent = "order_status";
+
+      if (!selected?.order) {
+        return tr("genericOrderFail");
+      }
+
+      orderListOffset = Math.min(Math.max((Number(selected.index) || 0) + 1, 0), totalOrders);
+      setCurrentOrderContext(selected.order, { silent: true });
+      return tr("confirmedPrefix") + "\n" + buildSingleOrderReply(selected.order, totalOrders);
+    }
+
+    if (isNegativeReply(query)) {
+      const nextIndex = (Number(pendingOrderMatch.activeIndex) || 0) + 1;
+      if (nextIndex < pendingOrderMatch.candidates.length) {
+        pendingOrderMatch.activeIndex = nextIndex;
+        lastBotIntent = "order_confirm";
+        return buildOrderConfirmationReply(
+          pendingOrderMatch.candidates[nextIndex],
+          nextIndex + 1,
+          pendingOrderMatch.candidates.length
+        );
+      }
+
+      pendingOrderMatch = null;
+      lastBotIntent = "order_status";
+      return tr("noConfidentMatch") + "\n" + buildRefineOrderHint();
+    }
+
+    if (isOrderStatusIntent(query)) {
+      pendingOrderMatch = null;
+      return null;
+    }
+
+    const detailTokens = extractOrderDetailTokens(query);
+    if (detailTokens.length > 0) {
+      pendingOrderMatch = null;
+      return "__CONTINUE_ORDER_MATCH__";
+    }
+
+    return tr("replyYesNo") + "\n" + buildRefineOrderHint();
+  }
+
+  async function getOrderStatusResponse(query) {
+    const pendingReply = consumePendingOrderConfirmation(query);
+    const shouldForceOrderLookup = pendingReply === "__CONTINUE_ORDER_MATCH__";
+    if (typeof pendingReply === "string" && pendingReply) {
+      if (pendingReply === "__CONTINUE_ORDER_MATCH__") {
+        // continue to the order lookup flow with the new description
+      } else {
+        return pendingReply;
+      }
+    }
+
+    if (!shouldForceOrderLookup && !isOrderStatusIntent(query)) {
+      return pendingReply;
+    }
+
+    if (!activeUser?.uid) {
+      lastBotIntent = "order_status";
+      return tr("userSignedOut");
+    }
+
+    const db = window.appDb;
+    if (!db || typeof db.listOrders !== "function") {
+      lastBotIntent = "order_status";
+      return tr("orderLookupUnavailable");
+    }
+
+    const showMoreIntent = isShowMoreOrdersIntent(query);
+    const detailTokens = extractOrderDetailTokens(query);
+    const shouldAttemptDetailMatch = !showMoreIntent && detailTokens.length > 0;
+
+    try {
+      const orders = await db.listOrders(activeUser.uid);
+      if (!Array.isArray(orders) || orders.length === 0) {
+        pendingOrderMatch = null;
+        lastBotIntent = "order_status";
+        return tr("noOrders");
+      }
+      cachedUserOrders = orders.slice();
+
+      if (showMoreIntent) {
+        pendingOrderMatch = null;
+        const response = buildOrderListReply(orders, orderListOffset, 3);
+        orderListOffset = Math.min(orderListOffset + 3, orders.length);
+        lastBotIntent = "order_list";
+        return response;
+      }
+
+      if (shouldAttemptDetailMatch) {
+        const rankedCandidates = rankOrdersByDetailQuery(orders, query)
+          .filter((entry) => entry.score >= 4)
+          .slice(0, 3);
+
+        if (rankedCandidates.length > 0) {
+          pendingOrderMatch = {
+            candidates: rankedCandidates,
+            activeIndex: 0,
+            totalOrders: orders.length
+          };
+          setCurrentOrderContext(rankedCandidates[0].order, { silent: true });
+          lastBotIntent = "order_confirm";
+          return buildOrderConfirmationReply(rankedCandidates[0], 1, rankedCandidates.length);
+        }
+      }
+
+      const primaryEntry = selectPrimaryOrderEntry(orders);
+      if (!primaryEntry?.order) {
+        pendingOrderMatch = null;
+        lastBotIntent = "order_status";
+        return tr("genericOrderFail");
+      }
+
+      let response = buildSingleOrderReply(primaryEntry.order, orders.length);
+      if (shouldAttemptDetailMatch) {
+        response = tr("noConfidentMatch") + "\n"
+          + response
+          + "\n"
+          + buildRefineOrderHint();
+      }
+
+      pendingOrderMatch = null;
+      setCurrentOrderContext(primaryEntry.order, { silent: true });
+      orderListOffset = Math.min(Math.max(primaryEntry.index + 1, 0), orders.length);
+      lastBotIntent = "order_status";
+      return response;
+    } catch (error) {
+      console.error("Order status lookup failed", error);
+      pendingOrderMatch = null;
+      lastBotIntent = "order_status";
+      return tr("genericOrderFail");
+    }
+  }
+
+  function isSupportTicketIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("need help with this order")
+      || text.includes("need help")
+      || text.includes("support ticket")
+      || text.includes("talk to support")
+      || text.includes("customer support")
+      || text.includes("kailangan ko ng tulong")
+      || text.includes("tulong sa order");
+  }
+
+  function isSupportReplyIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("reply to support")
+      || text.includes("reply to ticket")
+      || text.includes("message support")
+      || text.includes("update my ticket");
+  }
+
+  function isCancelOrderIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("cancel order")
+      || text.includes("cancel my order")
+      || text.includes("kanselahin")
+      || text.includes("cancel this order");
+  }
+
+  function isChangeContactIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("change contact")
+      || text.includes("change email")
+      || text.includes("update contact")
+      || text.includes("palitan ang email");
+  }
+
+  function isChangeAddressIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("change address")
+      || text.includes("update address")
+      || text.includes("new address")
+      || text.includes("palitan ang address");
+  }
+
+  function isRecommendationIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("recommend")
+      || text.includes("suggest")
+      || text.includes("recommendation")
+      || text.includes("suggestion");
+  }
+
+  function isStockAlertIntent(query) {
+    const text = normalizeText(query);
+    return (text.includes("back in stock") || text.includes("notify me") || text.includes("stock alert"))
+      && (text.includes("stock") || text.includes("size"));
+  }
+
+  function isCompareOrdersIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("compare my orders")
+      || text.includes("compare orders")
+      || text.includes("multi order")
+      || text.includes("compare latest");
+  }
+
+  function isDeliveryExceptionIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("not received")
+      || text.includes("wrong address")
+      || text.includes("courier issue")
+      || text.includes("delivery issue")
+      || text.includes("delivery exception");
+  }
+
+  function isReturnIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("return")
+      || text.includes("refund")
+      || text.includes("exchange")
+      || text.includes("palit")
+      || text.includes("ibalik")
+      || text.includes("isauli");
+  }
+
+  function isReturnStatusIntent(query) {
+    const text = normalizeText(query);
+    return text.includes("return status")
+      || text.includes("refund status")
+      || text.includes("status ng return")
+      || text.includes("status ng refund");
+  }
+
+  function parseBudgetAmount(query) {
+    const raw = String(query || "");
+    const match = raw.match(/(\d{2,7}(?:\.\d{1,2})?)/);
+    if (!match) return 0;
+    const value = Number(match[1]);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function extractSizeToken(query) {
+    const text = normalizeText(query);
+    const match = text.match(/\b(xxl|xl|xs|xxs|small|medium|large|[smlx]{1,3}|[0-9]{2,3})\b/);
+    if (!match) return "";
+    const token = String(match[1] || "").toUpperCase();
+    if (token === "SMALL") return "S";
+    if (token === "MEDIUM") return "M";
+    if (token === "LARGE") return "L";
+    return token;
+  }
+
+  function parseAddressLine(text, order) {
+    const parts = String(text || "").split(",").map((part) => part.trim()).filter(Boolean);
+    const oldAddress = order?.shippingAddress || {};
+    return {
+      addressLine1: parts[0] || oldAddress.addressLine1 || "",
+      city: parts[1] || oldAddress.city || "",
+      province: parts[2] || oldAddress.province || "",
+      postalCode: parts[3] || oldAddress.postalCode || "",
+      country: oldAddress.country || "",
+      firstName: oldAddress.firstName || "",
+      lastName: oldAddress.lastName || "",
+      company: oldAddress.company || "",
+      addressLine2: oldAddress.addressLine2 || "",
+      phone: oldAddress.phone || ""
+    };
+  }
+
+  function getReturnEligibility(order) {
+    if (!order || !order.id) {
+      return { eligible: false, reason: "Order context not found." };
+    }
+    const status = normalizeText(order.status || "pending");
+    if (status !== "delivered") {
+      return { eligible: false, reason: "Only delivered orders can be returned." };
+    }
+    const deliveredAt = getStatusHistoryDate(order, "delivered") || order.updatedAt || order.createdAt;
+    const deliveredMs = toDateMs(deliveredAt);
+    if (!deliveredMs) {
+      return { eligible: false, reason: "Missing delivery timestamp." };
+    }
+    const returnWindowDays = 14;
+    const ageMs = Date.now() - deliveredMs;
+    if (ageMs > returnWindowDays * 24 * 60 * 60 * 1000) {
+      return { eligible: false, reason: `Return window exceeded (${returnWindowDays} days).` };
+    }
+    return { eligible: true, reason: "" };
+  }
+
+  function computeSupportPriority(details, order) {
+    const text = normalizeText(details);
+    const urgentTerms = ["fraud", "scam", "chargeback", "urgent", "asap", "not received", "wrong item", "missing item"];
+    const highTerms = ["refund", "return", "cancel", "delivery issue", "courier issue"];
+    let priority = "normal";
+    if (urgentTerms.some((term) => text.includes(term))) {
+      priority = "urgent";
+    } else if (highTerms.some((term) => text.includes(term))) {
+      priority = "high";
+    }
+
+    const tags = [];
+    if (order?.status) tags.push(String(order.status));
+    if (text.includes("delivery")) tags.push("delivery");
+    if (text.includes("refund") || text.includes("return")) tags.push("refund_return");
+    if (text.includes("address")) tags.push("address_issue");
+    if (text.includes("contact")) tags.push("contact_issue");
+
+    const fraudFlags = [];
+    if (text.includes("fraud") || text.includes("scam") || text.includes("chargeback")) {
+      fraudFlags.push("fraud_keyword");
+    }
+
+    const dueHours = priority === "urgent" ? 1 : priority === "high" ? 4 : 24;
+    return {
+      priority,
+      tags,
+      fraudFlags,
+      slaDueAt: new Date(Date.now() + dueHours * 60 * 60 * 1000).toISOString()
+    };
+  }
+
+  function buildOrderAutoSummary(order, details) {
+    const lines = [];
+    lines.push("Customer concern: " + String(details || "").slice(0, 240));
+    lines.push("Order: " + String(order?.id || "N/A"));
+    lines.push("Status: " + formatOrderStatusLabel(order?.status || ""));
+    lines.push("Item: " + buildOrderItemLabel(order));
+    lines.push("Placed: " + formatOrderDateLabel(order?.createdAt || ""));
+    lines.push("ETA: " + getSmartEtaText(order));
+    return lines.join(" | ").slice(0, 980);
+  }
+
+  function getAwayModeText() {
+    const quietEnabled = Boolean(supportSettings?.quietHoursEnabled);
+    const quietStart = String(supportSettings?.quietHoursStart || "22:00");
+    const quietEnd = String(supportSettings?.quietHoursEnd || "07:00");
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const parseMinutes = function (value, fallbackMinutes) {
+      const parts = String(value || "").split(":");
+      const hh = Number(parts[0]);
+      const mm = Number(parts[1]);
+      if (!Number.isFinite(hh) || !Number.isFinite(mm)) return fallbackMinutes;
+      return Math.max(0, Math.min(23, hh)) * 60 + Math.max(0, Math.min(59, mm));
+    };
+    const startMinutes = parseMinutes(quietStart, 22 * 60);
+    const endMinutes = parseMinutes(quietEnd, 7 * 60);
+    const isQuietWindow = startMinutes <= endMinutes
+      ? (nowMinutes >= startMinutes && nowMinutes <= endMinutes)
+      : (nowMinutes >= startMinutes || nowMinutes <= endMinutes);
+
+    if (quietEnabled && isQuietWindow) {
+      const message = String(supportSettings?.quietHoursMessage || "").trim() || "Our team is currently in quiet hours.";
+      const minutes = Math.max(0, Number(supportSettings?.awayExpectedMinutes || 120));
+      return tr("awayAutoReply", { message, minutes });
+    }
+
+    const awayEnabled = Boolean(supportSettings?.awayEnabled);
+    if (!awayEnabled) return "";
+    const message = String(supportSettings?.awayMessage || "").trim() || "Our support team is currently away.";
+    const minutes = Math.max(0, Number(supportSettings?.awayExpectedMinutes || 60));
+    return tr("awayAutoReply", { message, minutes });
+  }
+
+  async function createSupportTicket(order, details) {
+    const db = window.appDb;
+    if (!db || typeof db.createSupportTicket !== "function" || !activeUser?.uid) {
+      const err = new Error("support_ticket_unavailable");
+      err.code = "support_ticket_unavailable";
+      throw err;
+    }
+
+    const triage = computeSupportPriority(details, order);
+    if (typeof db.listUserReturnRequests === "function") {
+      const returnRows = await db.listUserReturnRequests(activeUser.uid).catch(() => []);
+      const rows = Array.isArray(returnRows) ? returnRows : [];
+      const activeClaims = rows.filter((row) => {
+        const status = normalizeText(row?.status || "requested");
+        return status === "requested" || status === "approved" || status === "received";
+      }).length;
+      if (rows.length >= 3) {
+        triage.fraudFlags.push("high_return_volume");
+      }
+      if (activeClaims >= 2 && triage.priority === "normal") {
+        triage.priority = "high";
+      }
+    }
+    const dueHours = triage.priority === "urgent" ? 1 : triage.priority === "high" ? 4 : 24;
+    triage.slaDueAt = new Date(Date.now() + dueHours * 60 * 60 * 1000).toISOString();
+    const payload = {
+      requesterUid: activeUser.uid,
+      requesterEmail: activeUser.email || "",
+      orderId: String(order?.id || ""),
+      orderUid: String(order?.uid || activeUser.uid),
+      orderStatus: String(order?.status || ""),
+      productName: String(order?.productName || ""),
+      summary: String(details || "").slice(0, 180),
+      details: String(details || "").slice(0, 1200),
+      autoSummary: buildOrderAutoSummary(order, details),
+      source: "chatbot",
+      status: "open",
+      priority: triage.priority,
+      tags: triage.tags,
+      fraudFlags: triage.fraudFlags,
+      slaDueAt: triage.slaDueAt,
+      handoffRequested: true
+    };
+
+    const created = await db.createSupportTicket(payload);
+    const ticketId = String(created?.id || "");
+    if (ticketId) {
+      const row = created && typeof created === "object"
+        ? created
+        : {
+          id: ticketId,
+          status: "open",
+          requesterUid: activeUser.uid,
+          requesterEmail: activeUser.email || "",
+          updatedAt: new Date().toISOString()
+        };
+      latestSupportTickets = [row].concat(latestSupportTickets.filter((item) => item.id !== ticketId)).slice(0, 120);
+    }
+    if (ticketId && typeof db.sendSupportTicketMessage === "function") {
+      await db.sendSupportTicketMessage(ticketId, {
+        requesterUid: activeUser.uid,
+        senderUid: activeUser.uid,
+        senderEmail: activeUser.email || "",
+        senderRole: "customer",
+        text: String(details || "").slice(0, 1200),
+        nextStatus: "in_progress"
+      }).catch(() => {});
+    }
+    setActiveSupportTicket(ticketId);
+    startSupportMessageWatcher(ticketId, db);
+    return ticketId;
+  }
+
+  async function sendSupportReplyMessage(details) {
+    const db = window.appDb;
+    if (!db || typeof db.sendSupportTicketMessage !== "function" || !activeUser?.uid) {
+      return "";
+    }
+    const ticket = getActiveSupportTicket();
+    if (!ticket?.id) {
+      return "";
+    }
+    await db.sendSupportTicketMessage(ticket.id, {
+      requesterUid: activeUser.uid,
+      senderUid: activeUser.uid,
+      senderEmail: activeUser.email || "",
+      senderRole: "customer",
+      text: String(details || "").slice(0, 1200),
+      nextStatus: "in_progress"
+    });
+    return ticket.id;
+  }
+
+  async function consumePendingSupportReply(query) {
+    if (!pendingSupportReplyMode) {
+      return null;
+    }
+
+    if (isCancelIntent(query)) {
+      pendingSupportReplyMode = false;
+      return tr("supportCanceled");
+    }
+
+    const details = String(query || "").trim();
+    if (!details) {
+      return tr("supportReplyAsk");
+    }
+
+    try {
+      const ticketId = await sendSupportReplyMessage(details);
+      pendingSupportReplyMode = false;
+      if (!ticketId) {
+        return tr("supportNoOpenTicket");
+      }
+      return tr("supportReplySent", { ticketId });
+    } catch (error) {
+      console.error("Support reply send failed", error);
+      pendingSupportReplyMode = false;
+      return tr("supportCreateFail");
+    }
+  }
+
+  async function consumePendingOrderAction(query) {
+    if (!pendingOrderAction || !activeUser?.uid) {
+      return null;
+    }
+    const db = window.appDb;
+    if (!db || typeof db.applyOrderSelfServiceAction !== "function") {
+      pendingOrderAction = null;
+      return tr("orderActionInvalid");
+    }
+
+    const actionType = String(pendingOrderAction.type || "");
+    const order = pendingOrderAction.order;
+    if (!order?.id) {
+      pendingOrderAction = null;
+      return tr("orderActionInvalid");
+    }
+
+    if (isCancelIntent(query)) {
+      pendingOrderAction = null;
+      return tr("supportCanceled");
+    }
+
+    try {
+      if (actionType === "cancel_order") {
+        if (!isAffirmativeReply(query)) {
+          return tr("orderActionCancelAsk");
+        }
+        const updated = await db.applyOrderSelfServiceAction(activeUser.uid, order.id, {
+          action: "cancel_order",
+          reason: "Canceled by customer via support chatbot",
+          actorUid: activeUser.uid,
+          actorEmail: activeUser.email || ""
+        });
+        pendingOrderAction = null;
+        if (updated && updated.id) {
+          setCurrentOrderContext(updated, { silent: true });
+        }
+        return tr("orderActionCancelDone");
+      }
+
+      if (actionType === "change_contact") {
+        const value = String(query || "").trim();
+        const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+        if (!valid) {
+          return tr("orderActionContactAsk");
+        }
+        const updated = await db.applyOrderSelfServiceAction(activeUser.uid, order.id, {
+          action: "change_contact",
+          contactEmail: value,
+          actorUid: activeUser.uid,
+          actorEmail: activeUser.email || ""
+        });
+        pendingOrderAction = null;
+        if (updated && updated.id) {
+          setCurrentOrderContext(updated, { silent: true });
+        }
+        return tr("orderActionContactDone");
+      }
+
+      if (actionType === "change_address") {
+        const value = String(query || "").trim();
+        if (!value) {
+          return tr("orderActionAddressAsk");
+        }
+        const shippingAddress = parseAddressLine(value, order);
+        const updated = await db.applyOrderSelfServiceAction(activeUser.uid, order.id, {
+          action: "change_address",
+          shippingAddress,
+          actorUid: activeUser.uid,
+          actorEmail: activeUser.email || ""
+        });
+        pendingOrderAction = null;
+        if (updated && updated.id) {
+          setCurrentOrderContext(updated, { silent: true });
+        }
+        return tr("orderActionAddressDone");
+      }
+    } catch (error) {
+      console.error("Order self-service action failed", error);
+      pendingOrderAction = null;
+      if (actionType === "cancel_order") {
+        return tr("orderActionCancelFail");
+      }
+      return tr("orderActionInvalid");
+    }
+
+    pendingOrderAction = null;
+    return null;
+  }
+
+  async function consumePendingSupportTicket(query) {
+    if (!pendingSupportTicket) {
+      return null;
+    }
+
+    if (isCancelIntent(query)) {
+      pendingSupportTicket = null;
+      return tr("supportCanceled");
+    }
+
+    const details = String(query || "").trim();
+    if (!details) {
+      return tr("supportAskDetails");
+    }
+
+    try {
+      const ticketId = await createSupportTicket(pendingSupportTicket.order, details);
+      pendingSupportTicket = null;
+      return tr("supportCreated", { ticketId });
+    } catch (error) {
+      console.error("Support ticket creation failed", error);
+      pendingSupportTicket = null;
+      return tr("supportCreateFail");
+    }
+  }
+
+  async function consumePendingReturnRequest(query) {
+    if (!pendingReturnRequest) {
+      return null;
+    }
+
+    if (isCancelIntent(query)) {
+      pendingReturnRequest = null;
+      return tr("returnCanceled");
+    }
+
+    const reason = String(query || "").trim();
+    if (!reason) {
+      return tr("returnAskReason");
+    }
+
+    const db = window.appDb;
+    if (!db || typeof db.createReturnRequest !== "function" || !activeUser?.uid) {
+      pendingReturnRequest = null;
+      return tr("returnCreateFail");
+    }
+
+    try {
+      const order = pendingReturnRequest.order;
+      const eligibility = getReturnEligibility(order);
+      if (!eligibility.eligible) {
+        pendingReturnRequest = null;
+        return tr("returnNotEligible", { reason: eligibility.reason || "Policy rules" });
+      }
+      const row = await db.createReturnRequest({
+        orderId: String(order?.id || ""),
+        orderUid: String(order?.uid || activeUser.uid),
+        requesterUid: activeUser.uid,
+        requesterEmail: activeUser.email || "",
+        reason: reason.slice(0, 200),
+        notes: "Requested via support chatbot"
+      });
+      pendingReturnRequest = null;
+      return tr("returnCreated", {
+        requestId: String(row?.id || "N/A"),
+        status: formatOrderStatusLabel(row?.status || "requested")
+      });
+    } catch (error) {
+      console.error("Return request creation failed", error);
+      pendingReturnRequest = null;
+      if (String(error?.code || "").toLowerCase() === "return_request_already_exists") {
+        return tr("returnExists");
+      }
+      return tr("returnCreateFail");
+    }
+  }
+
+  async function getCompareOrdersResponse() {
+    if (!activeUser?.uid) {
+      return tr("userSignedOut");
+    }
+    const db = window.appDb;
+    if (!db || typeof db.listOrders !== "function") {
+      return tr("orderLookupUnavailable");
+    }
+    const orders = await db.listOrders(activeUser.uid);
+    if (!Array.isArray(orders) || orders.length < 2) {
+      return tr("compareNone");
+    }
+
+    let returnRows = [];
+    if (typeof db.listUserReturnRequests === "function") {
+      returnRows = await db.listUserReturnRequests(activeUser.uid).catch(() => []);
+    }
+    const returnMap = {};
+    (Array.isArray(returnRows) ? returnRows : []).forEach((row) => {
+      if (row.orderId && !returnMap[row.orderId]) {
+        returnMap[row.orderId] = formatOrderStatusLabel(row.status || "requested");
+      }
+    });
+
+    const lines = [tr("compareHeader")];
+    orders
+      .slice()
+      .sort((a, b) => toDateMs(b.createdAt) - toDateMs(a.createdAt))
+      .slice(0, 3)
+      .forEach((order, idx) => {
+        lines.push(
+          `${idx + 1}. ${buildOrderItemLabel(order)} | ${formatOrderStatusLabel(order.status)} | PHP ${(Number(order.totalPrice || 0)).toFixed(2)}`
+        );
+        lines.push(`   ${getSmartEtaText(order)} | Return: ${returnMap[order.id] || "none"}`);
+      });
+    return lines.join("\n");
+  }
+
+  async function getRecommendationResponse(query) {
+    const db = window.appDb;
+    if (!db || typeof db.listProducts !== "function") {
+      return tr("recommendationNone");
+    }
+    const products = await db.listProducts();
+    const budget = parseBudgetAmount(query);
+    const sizeToken = extractSizeToken(query) || String(userSupportPreference?.typicalSize || "").toUpperCase();
+    const normalizedQuery = normalizeText(query);
+    const categoryHints = ["shirt", "hoodie", "pants", "shoes", "bag", "dress", "apparel", "accessory"];
+    const categoryToken = categoryHints.find((token) => normalizedQuery.includes(token)) || "";
+    const filtered = (Array.isArray(products) ? products : [])
+      .filter((product) => product?.isActive !== false)
+      .filter((product) => Number(product?.stock || 0) > 0)
+      .filter((product) => budget <= 0 || Number(product?.price || 0) <= budget)
+      .filter((product) => {
+        if (!categoryToken) return true;
+        const haystack = normalizeText(
+          (product?.category || "")
+          + " "
+          + (product?.name || "")
+          + " "
+          + (Array.isArray(product?.tags) ? product.tags.join(" ") : "")
+        );
+        return haystack.includes(categoryToken);
+      })
+      .filter((product) => {
+        if (!sizeToken) return true;
+        return normalizeText(product?.size || "").includes(normalizeText(sizeToken));
+      })
+      .slice()
+      .sort((a, b) => {
+        if (budget > 0) {
+          const da = Math.abs(Number(a?.price || 0) - budget);
+          const dbGap = Math.abs(Number(b?.price || 0) - budget);
+          if (da !== dbGap) return da - dbGap;
+        }
+        return Number(a?.price || 0) - Number(b?.price || 0);
+      })
+      .slice(0, 3);
+
+    if (!filtered.length) {
+      return tr("recommendationNone");
+    }
+
+    const lines = [tr("recommendationHeader")];
+    filtered.forEach((product, idx) => {
+      lines.push(
+        `${idx + 1}. ${product.name || `Product #${product.id || "N/A"}`} | Size ${product.size || "N/A"} | PHP ${(Number(product.price || 0)).toFixed(2)} | Stock ${product.stock}`
+      );
+    });
+    return lines.join("\n");
+  }
+
+  async function createStockAlertFromIntent(query) {
+    if (!activeUser?.uid) {
+      return tr("userSignedOut");
+    }
+    const db = window.appDb;
+    if (!db || typeof db.createStockAlert !== "function") {
+      return tr("stockAlertFail");
+    }
+    const order = getCurrentOrderContextOrFallback();
+    const desiredSize = extractSizeToken(query) || String(order?.productSize || userSupportPreference?.typicalSize || "").toUpperCase();
+    const payload = {
+      uid: activeUser.uid,
+      email: activeUser.email || "",
+      productId: Number(order?.productId || 0) || 0,
+      productName: String(order?.productName || "").trim(),
+      desiredSize: desiredSize || "",
+      note: "Created from FAQ support chatbot"
+    };
+    if (!payload.productId && !payload.productName) {
+      return tr("stockAlertFail");
+    }
+    try {
+      const row = await db.createStockAlert(payload);
+      return tr("stockAlertCreated", {
+        product: row?.productName || payload.productName || `#${row?.productId || payload.productId}`,
+        size: row?.desiredSize || desiredSize || ""
+      });
+    } catch (error) {
+      console.error("Stock alert creation failed", error);
+      return tr("stockAlertFail");
+    }
+  }
+
+  async function maybeHandleSupportOrReturnIntents(query) {
+    const pendingOrderActionReply = await consumePendingOrderAction(query);
+    if (pendingOrderActionReply) {
+      return pendingOrderActionReply;
+    }
+
+    const pendingSupportReplyMessage = await consumePendingSupportReply(query);
+    if (pendingSupportReplyMessage) {
+      return pendingSupportReplyMessage;
+    }
+
+    const pendingSupportCreateReply = await consumePendingSupportTicket(query);
+    if (pendingSupportCreateReply) {
+      return pendingSupportCreateReply;
+    }
+
+    const pendingReturnReply = await consumePendingReturnRequest(query);
+    if (pendingReturnReply) {
+      return pendingReturnReply;
+    }
+
+    if (isRecommendationIntent(query)) {
+      return getRecommendationResponse(query);
+    }
+
+    if (isStockAlertIntent(query)) {
+      return createStockAlertFromIntent(query);
+    }
+
+    if (isCompareOrdersIntent(query)) {
+      return getCompareOrdersResponse();
+    }
+
+    if (isDeliveryExceptionIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("deliveryExceptionGuide") + "\n" + tr("userSignedOut");
+      }
+      const order = getCurrentOrderContextOrFallback();
+      if (!order) {
+        return tr("deliveryExceptionGuide") + "\n" + tr("supportNeedOrder");
+      }
+      pendingSupportTicket = { order };
+      const awayText = getAwayModeText();
+      return (awayText ? awayText + "\n" : "") + tr("deliveryExceptionGuide") + "\n" + tr("supportAskDetails");
+    }
+
+    if (isCancelOrderIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("userSignedOut");
+      }
+      const order = getCurrentOrderContextOrFallback();
+      if (!order) {
+        return tr("supportNeedOrder");
+      }
+      pendingOrderAction = { type: "cancel_order", order };
+      return tr("orderActionCancelAsk");
+    }
+
+    if (isChangeContactIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("userSignedOut");
+      }
+      const order = getCurrentOrderContextOrFallback();
+      if (!order) {
+        return tr("supportNeedOrder");
+      }
+      pendingOrderAction = { type: "change_contact", order };
+      return tr("orderActionContactAsk");
+    }
+
+    if (isChangeAddressIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("userSignedOut");
+      }
+      const order = getCurrentOrderContextOrFallback();
+      if (!order) {
+        return tr("supportNeedOrder");
+      }
+      pendingOrderAction = { type: "change_address", order };
+      return tr("orderActionAddressAsk");
+    }
+
+    if (isSupportReplyIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("userSignedOut");
+      }
+      const ticket = getActiveSupportTicket();
+      if (!ticket || !isSupportTicketOpenStatus(ticket.status)) {
+        return tr("supportNoOpenTicket");
+      }
+      pendingSupportReplyMode = true;
+      return tr("supportReplyAsk");
+    }
+
+    if (isSupportTicketIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("userSignedOut");
+      }
+      const awayText = getAwayModeText();
+      const ticket = getActiveSupportTicket();
+      if (ticket && isSupportTicketOpenStatus(ticket.status)) {
+        pendingSupportReplyMode = true;
+        return (awayText ? awayText + "\n" : "") + tr("supportReplyAsk");
+      }
+      const order = getCurrentOrderContextOrFallback();
+      if (!order) {
+        return tr("supportNeedOrder");
+      }
+      pendingSupportTicket = { order };
+      return (awayText ? awayText + "\n" : "") + tr("supportAskDetails");
+    }
+
+    if (isReturnStatusIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("userSignedOut");
+      }
+      const db = window.appDb;
+      if (!db || typeof db.listUserReturnRequests !== "function") {
+        return tr("orderLookupUnavailable");
+      }
+      try {
+        const rows = await db.listUserReturnRequests(activeUser.uid);
+        if (!Array.isArray(rows) || rows.length === 0) {
+          return tr("returnStatusNone");
+        }
+        const lines = [tr("returnStatusHeader")];
+        rows.slice(0, 3).forEach((row, idx) => {
+          lines.push(
+            tr("returnStatusLine", {
+              index: idx + 1,
+              orderId: row.orderId || "N/A",
+              status: formatOrderStatusLabel(row.status || "requested"),
+              createdAt: formatOrderDateLabel(row.createdAt || "")
+            })
+          );
+        });
+        lines.push(tr("returnStatusAsk"));
+        return lines.join("\n");
+      } catch (error) {
+        console.error("Return status lookup failed", error);
+        return tr("returnCreateFail");
+      }
+    }
+
+    if (isReturnIntent(query)) {
+      if (!activeUser?.uid) {
+        return tr("userSignedOut");
+      }
+      const order = getCurrentOrderContextOrFallback();
+      if (!order) {
+        return tr("returnNeedOrder");
+      }
+      const eligibility = getReturnEligibility(order);
+      if (!eligibility.eligible) {
+        return tr("returnNotEligible", { reason: eligibility.reason || "Policy rules" });
+      }
+      pendingReturnRequest = { order };
+      return tr("returnAskReason");
+    }
+
+    return null;
+  }
+
+  function maybeHandleLanguageIntent(query) {
+    if (isTagalogIntent(query)) {
+      setLanguage("tl", { announce: false });
+      return tr("langSwitchedTl");
+    }
+    if (isEnglishIntent(query)) {
+      setLanguage("en", { announce: false });
+      return tr("langSwitchedEn");
+    }
+    return null;
+  }
+
+  async function maybeHandlePreferenceIntent(query) {
+    const text = String(query || "").trim();
+    const normalized = normalizeText(text);
+    const db = window.appDb;
+    if (!activeUser?.uid || !db || typeof db.setSupportPreference !== "function") {
+      return null;
+    }
+
+    let nextSize = "";
+    let nextContactMethod = "";
+    const sizeMatch = normalized.match(/\b(?:my size is|size is|size ko ay|size ko)\s+([a-z0-9]{1,5})\b/);
+    if (sizeMatch) {
+      nextSize = String(sizeMatch[1] || "").toUpperCase();
+    }
+    if (normalized.includes("contact me via email")) nextContactMethod = "email";
+    if (normalized.includes("contact me via phone")) nextContactMethod = "phone";
+    if (normalized.includes("contact me via sms")) nextContactMethod = "sms";
+    if (normalized.includes("contact me via chat")) nextContactMethod = "chat";
+
+    if (!nextSize && !nextContactMethod) {
+      return null;
+    }
+
+    try {
+      const row = await db.setSupportPreference(activeUser.uid, {
+        language: botLanguage,
+        preferredContactMethod: nextContactMethod || userSupportPreference?.preferredContactMethod || "",
+        typicalSize: nextSize || userSupportPreference?.typicalSize || ""
+      });
+      if (row) {
+        userSupportPreference = row;
+      }
+      return tr("preferenceSaved");
+    } catch (error) {
+      console.error("Support preference save failed", error);
+      return tr("orderActionInvalid");
+    }
+  }
+
+  async function queueUnresolvedQuery(query) {
+    const db = window.appDb;
+    if (!activeUser?.uid || !db || typeof db.queueUnresolvedQuestion !== "function") {
+      return;
+    }
+    const raw = String(query || "").trim();
+    if (!raw) return;
+    try {
+      const normalizedQuery = normalizeText(raw) || raw.toLowerCase();
+      await db.queueUnresolvedQuestion({
+        uid: activeUser.uid,
+        email: activeUser.email || "",
+        language: botLanguage,
+        queryText: raw.slice(0, 500),
+        normalizedQuery: normalizedQuery.slice(0, 500),
+        contextIntent: lastBotIntent || "faq"
+      });
+    } catch (error) {
+      console.error("Failed to queue unresolved question", error);
+    }
+  }
+
+  function fallbackResponse() {
+    return tr("fallback", { supportContact });
+  }
+
+  async function getBotResponse(query) {
+    const langResponse = maybeHandleLanguageIntent(query);
+    if (langResponse) {
+      lastBotIntent = "language";
+      return langResponse;
+    }
+
+    const preferenceResponse = await maybeHandlePreferenceIntent(query);
+    if (preferenceResponse) {
+      lastBotIntent = "preference";
+      return preferenceResponse;
+    }
+
+    const supportOrReturnResponse = await maybeHandleSupportOrReturnIntents(query);
+    if (supportOrReturnResponse) {
+      lastBotIntent = "support";
+      return supportOrReturnResponse;
+    }
+
+    const orderStatusResponse = await getOrderStatusResponse(query);
+    if (orderStatusResponse) {
+      return orderStatusResponse;
+    }
+
+    const match = findBestFaqMatch(query);
+    if (!match) {
+      lastBotIntent = "faq";
+      await queueUnresolvedQuery(query);
+      return fallbackResponse();
+    }
+    lastBotIntent = "faq";
+    const question = botLanguage === "tl" && match.questionTl ? match.questionTl : match.question;
+    const answer = botLanguage === "tl" && match.answerTl ? match.answerTl : match.answer;
+    return question + "\n" + answer;
+  }
+
+  function askQuestion(question) {
+    if (chatInput.disabled) return;
+    const value = String(question || "").trim();
+    if (!value) return;
+    if (value.length > 260) {
+      addMessage(tr("msgTooLong"), "bot", true);
+      return;
+    }
+
+    addMessage(value, "user", false);
+    chatInput.disabled = true;
+    chatSend.disabled = true;
+    addTypingIndicator();
+
+    typingTimeout = window.setTimeout(async function () {
+      removeTypingIndicator();
+      try {
+        const response = await getBotResponse(value);
+        addMessage(response, "bot", false);
+      } catch (error) {
+        console.error("Chatbot response failed", error);
+        addMessage(tr("genericBotFail"), "bot", true);
+      } finally {
+        chatInput.disabled = false;
+        chatSend.disabled = false;
+        chatInput.focus();
+      }
+    }, 420);
+  }
+
+  function addQuickButton(label, onClick) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "quick-btn";
+    btn.textContent = label;
+    btn.addEventListener("click", onClick);
+    quickRow.appendChild(btn);
+  }
+
+  function renderQuickQuestions() {
+    quickRow.innerHTML = "";
+    const questions = QUICK_QUESTIONS[botLanguage] || QUICK_QUESTIONS.en;
+
+    questions.forEach((question) => {
+      addQuickButton(question, function () {
+        askQuestion(question);
+      });
+    });
+
+    addQuickButton(tr("quickTrack"), function () {
+      askQuestion(tr("askTrackPrompt"));
+    });
+    addQuickButton(tr("quickMore"), function () {
+      askQuestion("show more orders");
+    });
+    addQuickButton(botLanguage === "tl" ? "Compare latest orders" : "Compare latest orders", function () {
+      askQuestion("compare my orders");
+    });
+
+    if (currentOrderContext?.id) {
+      addQuickButton(tr("quickHelp"), function () {
+        askQuestion(tr("quickHelp"));
+      });
+      addQuickButton(tr("quickReturn"), function () {
+        askQuestion(tr("quickReturn"));
+      });
+      addQuickButton(botLanguage === "tl" ? "Notify stock" : "Notify stock", function () {
+        askQuestion("notify me when this is back in stock");
+      });
+    }
+
+    addQuickButton(tr("quickEnglish"), function () {
+      setLanguage("en", { announce: true });
+    });
+    addQuickButton(tr("quickTagalog"), function () {
+      setLanguage("tl", { announce: true });
+    });
+  }
+
+  function getSpeechRecognitionCtor() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  }
+
+  function updateVoiceButtonState() {
+    if (!chatVoiceBtn) return;
+    chatVoiceBtn.classList.toggle("listening", isVoiceListening);
+    chatVoiceBtn.textContent = isVoiceListening ? tr("micListening") : tr("micBtn");
+  }
+
+  function initVoiceInput() {
+    if (!chatVoiceBtn) return;
+
+    const RecognitionCtor = getSpeechRecognitionCtor();
+    if (!RecognitionCtor) {
+      chatVoiceBtn.disabled = true;
+      chatVoiceBtn.title = tr("voiceUnsupported");
+      return;
+    }
+
+    speechRecognition = new RecognitionCtor();
+    speechRecognition.continuous = false;
+    speechRecognition.interimResults = false;
+    speechRecognition.maxAlternatives = 1;
+
+    speechRecognition.onstart = function () {
+      isVoiceListening = true;
+      updateVoiceButtonState();
+    };
+
+    speechRecognition.onend = function () {
+      isVoiceListening = false;
+      updateVoiceButtonState();
+    };
+
+    speechRecognition.onerror = function (event) {
+      isVoiceListening = false;
+      updateVoiceButtonState();
+      if (String(event?.error || "") !== "no-speech" && String(event?.error || "") !== "aborted") {
+        addMessage(tr("voicePermissionFail"), "bot", true);
+      }
+    };
+
+    speechRecognition.onresult = function (event) {
+      const transcript = String(event?.results?.[0]?.[0]?.transcript || "").trim();
+      if (!transcript) return;
+      chatInput.value = "";
+      askQuestion(transcript);
+    };
+
+    chatVoiceBtn.addEventListener("click", function () {
+      if (!speechRecognition) return;
+
+      if (isVoiceListening) {
+        try {
+          speechRecognition.stop();
+        } catch {}
+        return;
+      }
+
+      try {
+        speechRecognition.lang = botLanguage === "tl" ? "fil-PH" : "en-PH";
+        speechRecognition.start();
+      } catch (error) {
+        console.error("Voice input start failed", error);
+        addMessage(tr("voicePermissionFail"), "bot", true);
+      }
+    });
+
+    updateVoiceButtonState();
+  }
+
+  chatForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    const value = chatInput.value.trim();
+    if (!value) return;
+    chatInput.value = "";
+    askQuestion(value);
+    chatInput.focus();
+  });
+
+  chatInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+    }
+  });
+
+  updateInputLanguageUi();
+  renderFaqList();
+  renderQuickQuestions();
+  initVoiceInput();
+
+  setActiveUser(readStoredUser() || getLiveAuthUser(), { forceReload: true });
+
+  resolveInitialUser()
+    .then((resolvedUser) => {
+      setActiveUser(resolvedUser, { forceReload: true });
+    })
+    .catch(() => {});
+
+  if (window.authService?.onAuthStateChanged) {
+    unsubscribeAuth = window.authService.onAuthStateChanged((user) => {
+      setActiveUser(user, { announce: true });
+    });
+  }
+
+  window.addEventListener("storage", handleStorageEvent);
+  window.addEventListener("beforeunload", function () {
+    removeTypingIndicator();
+    stopCloudSync();
+    stopRealtimeWatchers();
+    if (speechRecognition && isVoiceListening) {
+      try {
+        speechRecognition.stop();
+      } catch {}
+    }
+    window.removeEventListener("storage", handleStorageEvent);
+    if (typeof unsubscribeAuth === "function") {
+      try {
+        unsubscribeAuth();
+      } catch {}
+    }
+  });
+})();
+</script>
+</body>
+</html>

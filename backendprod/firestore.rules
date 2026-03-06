@@ -52,6 +52,135 @@ service cloud.firestore {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
+    match /support_chats/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.messages is list
+        && request.resource.data.messages.size() <= 120;
+      allow delete: if false;
+    }
+
+    match /support_tickets/{ticketId} {
+      allow create: if signedIn()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.requesterEmail is string
+        && request.resource.data.summary is string
+        && request.resource.data.summary.size() <= 240
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 2000
+        && request.resource.data.status is string
+        && request.resource.data.priority is string;
+
+      allow read: if signedIn() && (
+        resource.data.requesterUid == request.auth.uid
+        || isAdmin()
+      );
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.requesterUid == request.auth.uid
+        && request.resource.data.requesterUid == resource.data.requesterUid
+      );
+
+      allow delete: if false;
+    }
+
+    match /support_ticket_messages/{messageId} {
+      allow create: if signedIn()
+        && request.resource.data.ticketId is string
+        && request.resource.data.ticketId.size() > 0
+        && request.resource.data.requesterUid is string
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.senderRole is string
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 2000
+        && (
+          isAdmin()
+          || request.resource.data.requesterUid == request.auth.uid
+        )
+        && request.resource.data.requesterUid
+          == get(/databases/$(database)/documents/support_tickets/$(request.resource.data.ticketId)).data.requesterUid;
+
+      allow read: if signedIn() && (
+        isAdmin()
+        || get(/databases/$(database)/documents/support_tickets/$(resource.data.ticketId)).data.requesterUid == request.auth.uid
+      );
+
+      allow update, delete: if false;
+    }
+
+    match /unresolved_questions/{questionId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.queryText is string
+        && request.resource.data.queryText.size() > 0
+        && request.resource.data.queryText.size() <= 500
+        && request.resource.data.normalizedQuery is string
+        && request.resource.data.normalizedQuery.size() > 0
+        && request.resource.data.normalizedQuery.size() <= 500
+        && request.resource.data.language is string;
+
+      allow read: if isAdmin() || (
+        signedIn()
+        && resource.data.uid == request.auth.uid
+      );
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.resolvedNote == resource.data.resolvedNote
+        && request.resource.data.resolvedBy == resource.data.resolvedBy
+      );
+      allow delete: if false;
+    }
+
+    match /stock_alerts/{alertId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.productName is string
+        && request.resource.data.desiredSize is string
+        && request.resource.data.status is string
+        && (
+          request.resource.data.productId is int
+          || request.resource.data.productId is float
+          || request.resource.data.productName.size() > 0
+        );
+
+      allow read: if signedIn() && (
+        resource.data.uid == request.auth.uid
+        || isAdmin()
+      );
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+      );
+
+      allow delete: if false;
+    }
+
+    match /support_settings/{settingsId} {
+      allow read: if true;
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /support_preferences/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create, update: if isAdmin() || (
+        isOwner(uid)
+        && request.resource.data.uid == uid
+      );
+
+      allow delete: if false;
+    }
+
     match /products/{productId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
