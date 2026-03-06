@@ -289,6 +289,31 @@
     opacity: 0.6;
   }
 
+  .voice-embed-hint {
+    border-top: 1px solid var(--border);
+    padding: 8px 10px;
+    background: #ffffff;
+  }
+
+  .voice-embed-note {
+    margin: 0 0 7px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .open-voice-chat {
+    width: 100%;
+    border: 1px solid #0e7490;
+    border-radius: 9px;
+    background: #ecfeff;
+    color: #0e7490;
+    font-weight: 700;
+    padding: 9px 11px;
+    min-height: 40px;
+    cursor: pointer;
+  }
+
   .chat-foot {
     border-top: 1px solid var(--border);
     padding: 8px 10px 10px;
@@ -379,6 +404,10 @@
       <button id="chatVoiceBtn" class="chat-voice" type="button" title="Use voice">Voice</button>
       <button id="chatSend" class="chat-send" type="submit">Send</button>
     </form>
+    <div id="voiceEmbedHint" class="voice-embed-hint" hidden>
+      <p id="voiceEmbedNote" class="voice-embed-note">Voice works best in full chat.</p>
+      <button id="openVoiceChatBtn" class="open-voice-chat" type="button">Open full chat for voice</button>
+    </div>
     <p class="chat-foot">Tip: You can ask about tracking, delivery, returns, payments, or request help from support.</p>
   </section>
 </main>
@@ -561,6 +590,8 @@
       awayAutoReply: "Support is currently in away mode. {message}\nExpected response: around {minutes} minutes.",
       voiceUnsupported: "Voice input is not supported in this browser.",
       voicePermissionFail: "Voice input failed. Please check microphone permission.",
+      voiceOpenFullBtn: "Open full chat for voice",
+      voiceEmbedNote: "Voice works best in full chat.",
       inputPlaceholder: "Ask about your order, delivery, returns, or payment...",
       sendBtn: "Send",
       micBtn: "Voice",
@@ -655,6 +686,8 @@
       awayAutoReply: "Naka-away mode ngayon ang support. {message}\nInaasahang response: mga {minutes} minuto.",
       voiceUnsupported: "Hindi supported ang voice input sa browser na ito.",
       voicePermissionFail: "Nag-fail ang voice input. Paki-check ang microphone permission.",
+      voiceOpenFullBtn: "Buksan ang full chat para sa boses",
+      voiceEmbedNote: "Mas maayos ang voice sa full chat.",
       inputPlaceholder: "Magtanong tungkol sa order, delivery, returns, o payment...",
       sendBtn: "Send",
       micBtn: "Boses",
@@ -688,6 +721,9 @@
   const chatVoiceBtn = document.getElementById("chatVoiceBtn");
   const chatSend = document.getElementById("chatSend");
   const chatSyncStatus = document.getElementById("chatSyncStatus");
+  const voiceEmbedHint = document.getElementById("voiceEmbedHint");
+  const voiceEmbedNote = document.getElementById("voiceEmbedNote");
+  const openVoiceChatBtn = document.getElementById("openVoiceChatBtn");
   let typingTimeout = null;
   let typingNode = null;
   let unsubscribeAuth = null;
@@ -792,6 +828,58 @@
         chatVoiceBtn.title = tr("micBtn");
       }
     }
+    if (voiceEmbedNote) {
+      voiceEmbedNote.textContent = tr("voiceEmbedNote");
+    }
+    if (openVoiceChatBtn) {
+      openVoiceChatBtn.textContent = tr("voiceOpenFullBtn");
+    }
+  }
+
+  function isEmbeddedFrame() {
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  }
+
+  function shouldUseEmbeddedVoiceFallback() {
+    if (!isEmbeddedFrame()) return false;
+    const referrer = String(document.referrer || "").toLowerCase();
+    return compact || referrer.includes("sites.google.com");
+  }
+
+  function getFullChatUrl() {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("compact");
+      return url.toString();
+    } catch {
+      return window.location.href;
+    }
+  }
+
+  function applyVoiceEmbedUiFallback() {
+    if (!voiceEmbedHint || !openVoiceChatBtn) return false;
+
+    if (!shouldUseEmbeddedVoiceFallback()) {
+      voiceEmbedHint.hidden = true;
+      if (chatVoiceBtn) {
+        chatVoiceBtn.hidden = false;
+      }
+      return false;
+    }
+
+    voiceEmbedHint.hidden = false;
+    if (chatVoiceBtn) {
+      chatVoiceBtn.hidden = true;
+      chatVoiceBtn.disabled = true;
+    }
+    openVoiceChatBtn.onclick = function () {
+      window.open(getFullChatUrl(), "_blank", "noopener,noreferrer");
+    };
+    return true;
   }
 
   function setLanguage(nextLang, options) {
@@ -3284,6 +3372,9 @@
 
   function initVoiceInput() {
     if (!chatVoiceBtn) return;
+    if (applyVoiceEmbedUiFallback()) {
+      return;
+    }
 
     const RecognitionCtor = getSpeechRecognitionCtor();
     if (!RecognitionCtor) {
